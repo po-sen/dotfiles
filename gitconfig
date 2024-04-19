@@ -1,0 +1,13 @@
+[alias]
+	cp = cherry-pick
+	fetch = fetch -pPt
+	tree = log --all --decorate --oneline --graph
+[branch]
+	sort = -committerdate
+[core]
+	editor = nvim
+[init]
+	defaultBranch = master
+[user]
+	email = posen2101024@gmail.com
+	name = Posen
