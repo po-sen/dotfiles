@@ -29,9 +29,9 @@ FILES += $(HOME)/.vimrc
 $(HOME)/.vimrc:
 	@ln -sf $(PWD)/vimrc $(HOME)/.vimrc
 
-FILES += $(HOME)/.config/nvim/prepare.vim
-$(HOME)/.config/nvim/prepare.vim:
-	@ln -sf $(PWD)/vimrc $(HOME)/.config/nvim/prepare.vim
+FILES += $(HOME)/.config/nvim/init.vim
+$(HOME)/.config/nvim/init.vim:
+	@ln -sf $(PWD)/vimrc $(HOME)/.config/nvim/init.vim
 
 FILES += $(HOME)/.bash_profile
 $(HOME)/.bash_profile:
@@ -41,12 +41,12 @@ FILES += $(HOME)/.gitconfig
 $(HOME)/.gitconfig:
 	@ln -sf $(PWD)/gitconfig $(HOME)/.gitconfig
 
-PHONY += prepare
-prepare: $(FILES)
-
 PHONY += clean
 clean:
 	@rm -rf $(FILES)
+
+PHONY += prepare
+prepare: $(FILES)
 
 PHONY += install-homebrew
 install-homebrew: prepare $(CURL)
@@ -61,12 +61,14 @@ PHONY += install-brewfile
 install-brewfile: prepare $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force
+	$(BREW) list --versions
 
 PHONY += update-brewfile
 update-brewfile: prepare $(BREW)
 	$(BREW) update
-	$(BREW) bundle dump --force
 	$(BREW) bundle install --force
+	$(BREW) bundle dump --force
+	$(BREW) list --versions
 
 PHONY += uninstall-brewfile
 uninstall-brewfile:
@@ -81,8 +83,9 @@ install-vim-plugins: prepare $(NVIM)
 	$(NVIM) --headless +"source snapshot.vim" +qall 2> /dev/null
 
 PHONY += update-vim-plugins
-update-vim-plugins: prepare $(NVIM)
+update-vim-plugins: prepare $(NVIM) $(GIT)
 	$(NVIM) --headless +PlugUpgrade +PlugUpdate +"PlugSnapshot! snapshot.vim" +qall 2> /dev/null
+	$(GIT) diff --color snapshot.vim
 
 PHONY += uninstall-vim-plugins
 uninstall-vim-plugins:
@@ -91,13 +94,10 @@ uninstall-vim-plugins:
 PHONY += all
 all: install-homebrew install-brewfile install-vim-plugins
 
-PHONY += clean-all
-clean-all: uninstall-vim-plugins uninstall-brewfile uninstall-homebrew clean
-
-PHONY += install
-install: install-brewfile install-vim-plugins
-
 PHONY += update
 update: update-brewfile update-vim-plugins
+
+PHONY += clean-all
+clean-all: uninstall-vim-plugins uninstall-brewfile uninstall-homebrew clean
 
 .PHONY: $(PHONY)
