@@ -85,7 +85,7 @@ install-vim-plugins: prepare $(NVIM)
 PHONY += update-vim-plugins
 update-vim-plugins: prepare $(NVIM) $(GIT)
 	$(NVIM) --headless +PlugUpgrade +PlugUpdate +"PlugSnapshot! snapshot.vim" +qall 2> /dev/null
-	$(GIT) diff --color snapshot.vim
+	$(GIT) --no-pager diff --color snapshot.vim
 
 PHONY += uninstall-vim-plugins
 uninstall-vim-plugins:
