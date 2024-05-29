@@ -180,7 +180,7 @@ autocmd Filetype helm        setlocal commentstring=#\ %s softtabstop=2 shiftwid
 autocmd Filetype javascript  setlocal commentstring=//\ %s softtabstop=2 shiftwidth=2
 autocmd Filetype Jenkinsfile setlocal commentstring=//\ %s softtabstop=2 shiftwidth=2
 autocmd Filetype make        setlocal commentstring=#\ %s noexpandtab
-autocmd Filetype nginx       setlocal commentstring=#\ %s
+autocmd Filetype nginx       setlocal commentstring=#\ %s noexpandtab
 autocmd FileType python      setlocal commentstring=#\ %s
 autocmd Filetype sql         setlocal commentstring=\--\ %s softtabstop=2 shiftwidth=2
 autocmd Filetype toml        setlocal commentstring=#\ %s softtabstop=2 shiftwidth=2
