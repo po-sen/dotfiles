@@ -4,10 +4,15 @@ This repository helps me set up and maintain my Mac.
 
 ## Installation
 ```bash
-make all
+make install
+```
+
+## Update
+```bash
+make update
 ```
 
 ## Uninstallation
 ```bash
-make clean-all
+make clean
 ```

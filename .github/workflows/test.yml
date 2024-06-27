@@ -13,9 +13,9 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
-      - name: Test make all
-        run: make all
+      - name: Test make install
+        run: make install
       - name: Test make update
         run: make update
-      - name: Test make clean-all
-        run: make clean-all
+      - name: Test make clean
+        run: make clean

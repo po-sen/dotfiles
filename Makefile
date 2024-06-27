@@ -7,14 +7,6 @@ SUDO ?= /usr/bin/sudo
 BREW ?= /opt/homebrew/bin/brew
 NVIM ?= /opt/homebrew/bin/nvim
 
-.DEFAULT_GOAL := pull-remote
-.PHONY: pull-remote
-pull-remote: $(GIT)
-	@$(GIT) config remote.origin.url git@github.com:Posen2101024/dotfiles.git
-	@$(GIT) config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
-	@$(GIT) fetch --force origin
-	@$(GIT) reset --hard origin/master
-
 FILES += $(HOME)/.vim/autoload/plug.vim
 $(HOME)/.vim/autoload/plug.vim: $(CURL)
 	@$(CURL) --silent --create-dirs -fLo $(HOME)/.vim/autoload/plug.vim \
@@ -41,15 +33,8 @@ FILES += $(HOME)/.gitconfig
 $(HOME)/.gitconfig:
 	@ln -sf $(PWD)/gitconfig $(HOME)/.gitconfig
 
-.PHONY: clean
-clean:
-	@rm -rf $(FILES)
-
-.PHONY: prepare
-prepare: $(FILES)
-
 .PHONY: install-homebrew
-install-homebrew: prepare $(CURL)
+install-homebrew: $(FILES) $(CURL)
 	@bash -c "$$($(CURL) -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 .PHONY: uninstall-homebrew
@@ -58,13 +43,13 @@ uninstall-homebrew: $(CURL) $(SUDO)
 	@$(SUDO) rm -rf /opt/homebrew/
 
 .PHONY: install-brewfile
-install-brewfile: prepare $(BREW)
+install-brewfile: $(FILES) $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force
 	$(BREW) list --versions
 
 .PHONY: update-brewfile
-update-brewfile: prepare $(BREW)
+update-brewfile: $(FILES) $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force
 	$(BREW) bundle dump --force
@@ -79,11 +64,11 @@ uninstall-brewfile:
 	fi;
 
 .PHONY: install-vim-plugins
-install-vim-plugins: prepare $(NVIM)
+install-vim-plugins: $(FILES) $(NVIM)
 	$(NVIM) --headless +"source snapshot.vim" +qall 2> /dev/null
 
 .PHONY: update-vim-plugins
-update-vim-plugins: prepare $(NVIM) $(GIT)
+update-vim-plugins: $(FILES) $(NVIM) $(GIT)
 	$(NVIM) --headless +PlugUpgrade +PlugUpdate +"PlugSnapshot! snapshot.vim" +qall 2> /dev/null
 	$(GIT) --no-pager diff --color snapshot.vim
 
@@ -91,11 +76,20 @@ update-vim-plugins: prepare $(NVIM) $(GIT)
 uninstall-vim-plugins:
 	@rm -rf $(HOME)/.vim/plugged/*
 
-.PHONY: all
-all: install-homebrew install-brewfile install-vim-plugins
+.DEFAULT_GOAL := pull-remote
+.PHONY: pull-remote
+pull-remote: $(GIT)
+	@$(GIT) config remote.origin.url git@github.com:Posen2101024/dotfiles.git
+	@$(GIT) config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
+	@$(GIT) fetch --force origin
+	@$(GIT) reset --hard origin/$(shell git branch --show-current)
+
+.PHONY: install
+install: install-homebrew install-brewfile install-vim-plugins
 
 .PHONY: update
-update: update-brewfile update-vim-plugins
+update: pull-remote update-brewfile update-vim-plugins
 
-.PHONY: clean-all
-clean-all: uninstall-vim-plugins uninstall-brewfile uninstall-homebrew clean
+.PHONY: clean
+clean: uninstall-vim-plugins uninstall-brewfile uninstall-homebrew
+	@rm -rf $(FILES)
