@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - name: Test make install
         run: make install
       - name: Test make update
