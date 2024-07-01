@@ -52,7 +52,7 @@ install-brewfile: $(FILES) $(BREW)
 update-brewfile: $(FILES) $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force
-	$(BREW) bundle dump --force
+	$(BREW) bundle dump --force --brews --casks --tap
 	$(BREW) list --versions
 
 .PHONY: uninstall-brewfile
