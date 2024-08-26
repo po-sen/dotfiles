@@ -65,12 +65,11 @@ uninstall-brewfile:
 
 .PHONY: install-vim-plugins
 install-vim-plugins: $(FILES) $(NVIM)
-	$(NVIM) --headless +"source snapshot.vim" +qall 2> /dev/null
+	$(NVIM) --headless +PlugUpgrade +PlugInstall +qall 2> /dev/null
 
 .PHONY: update-vim-plugins
-update-vim-plugins: $(FILES) $(NVIM) $(GIT)
-	$(NVIM) --headless +PlugUpgrade +PlugUpdate +"PlugSnapshot! snapshot.vim" +qall 2> /dev/null
-	$(GIT) --no-pager diff --color snapshot.vim
+update-vim-plugins: $(FILES) $(NVIM)
+	$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall 2> /dev/null
 
 .PHONY: uninstall-vim-plugins
 uninstall-vim-plugins:
