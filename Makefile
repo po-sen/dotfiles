@@ -1,10 +1,10 @@
 SHELL := /bin/bash
 FILES :=
 
-BREW ?= /opt/homebrew/bin/brew
-NVIM ?= /opt/homebrew/bin/nvim
-ASDF ?= /opt/homebrew/bin/asdf
-BASH ?= /opt/homebrew/bin/bash
+BREW ?= /usr/local/bin/brew
+NVIM ?= /usr/local/bin/nvim
+ASDF ?= /usr/local/bin/asdf
+BASH ?= /usr/local/bin/bash
 
 NEWSHELL ?= $(BASH)
 
@@ -56,7 +56,7 @@ install-brewfile: $(BREW)
 update-brewfile: $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force
-	$(BREW) bundle dump --force --brews --casks --taps
+	$(BREW) bundle dump --force --brews --casks --taps --vscode
 	$(BREW) list --versions
 
 .PHONY: uninstall-brewfile
