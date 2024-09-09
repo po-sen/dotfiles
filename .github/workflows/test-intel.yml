@@ -1,15 +1,15 @@
-name: Test
+name: Test Intel
 on:
   push:
-    branches-ignore:
+    branches:
       - 'intel/**'
   pull_request:
-    branches-ignore:
+    branches:
       - 'intel/**'
 jobs:
   test:
     name: 'macOS'
-    runs-on: 'macos-latest'
+    runs-on: 'macos-13'
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
