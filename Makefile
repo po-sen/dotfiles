@@ -6,6 +6,7 @@ CURL ?= /usr/bin/curl
 SUDO ?= /usr/bin/sudo
 BREW ?= /opt/homebrew/bin/brew
 NVIM ?= /opt/homebrew/bin/nvim
+ASDF ?= /opt/homebrew/bin/asdf
 
 FILES += $(HOME)/.vim/autoload/plug.vim
 $(HOME)/.vim/autoload/plug.vim: $(CURL)
@@ -32,6 +33,10 @@ $(HOME)/.bash_profile:
 FILES += $(HOME)/.gitconfig
 $(HOME)/.gitconfig:
 	@ln -sf $(PWD)/gitconfig $(HOME)/.gitconfig
+
+FILES += $(HOME)/.tool-versions
+$(HOME)/.tool-versions:
+	@ln -sf $(PWD)/tool-versions $(HOME)/.tool-versions
 
 .PHONY: install-homebrew
 install-homebrew: $(FILES) $(CURL)
@@ -75,20 +80,29 @@ update-vim-plugins: $(FILES) $(NVIM)
 uninstall-vim-plugins:
 	@rm -rf $(HOME)/.vim/plugged/*
 
+.PHONY: install-tool-versions
+install-tool-versions: $(FILES) $(ASDF)
+	$(ASDF) plugin add python
+	$(ASDF) install
+
+.PHONY: uninstall-tool-versions
+uninstall-tool-versions: $(FILES) $(ASDF)
+	$(ASDF) plugin remove python
+
 .DEFAULT_GOAL := pull-remote
 .PHONY: pull-remote
 pull-remote: $(GIT)
-	@$(GIT) config remote.origin.url git@github.com:Posen2101024/dotfiles.git
+	@$(GIT) config remote.origin.url git@github.com:po-sen/dotfiles.git
 	@$(GIT) config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
 	@$(GIT) fetch --force origin
 	@$(GIT) reset --hard origin/$(shell git branch --show-current)
 
 .PHONY: install
-install: install-homebrew install-brewfile install-vim-plugins
+install: install-homebrew install-brewfile install-vim-plugins install-tool-versions
 
 .PHONY: update
-update: pull-remote update-brewfile update-vim-plugins
+update: update-brewfile update-vim-plugins install-tool-versions
 
 .PHONY: clean
-clean: uninstall-vim-plugins uninstall-brewfile uninstall-homebrew
+clean: uninstall-tool-versions uninstall-vim-plugins uninstall-brewfile uninstall-homebrew
 	@rm -rf $(FILES)
