@@ -8,11 +8,11 @@ ASDF ?= $(shell brew --prefix)/bin/asdf
 NEWSHELL ?= $(shell brew --prefix)/bin/bash
 
 
-FILES += $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
+# FILES += $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim:
 	@curl --silent --create-dirs -fLo $@ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
-FILES += $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim
+# FILES += $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim
 $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(PWD)/vimrc
 	@ln -sf $(PWD)/vimrc $@
 
@@ -24,7 +24,7 @@ FILES += $(HOME)/.zprofile
 $(HOME)/.zprofile: $(PWD)/zprofile
 	@ln -sf $(PWD)/zprofile $@
 
-FILES += $(HOME)/.gitconfig
+# FILES += $(HOME)/.gitconfig
 $(HOME)/.gitconfig: $(PWD)/gitconfig
 	@ln -sf $(PWD)/gitconfig $@
 
@@ -70,11 +70,11 @@ uninstall-brewfile: $(BREW)
 	fi;
 
 .PHONY: install-vim-plugins
-install-vim-plugins: $(NVIM) $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
+-install-vim-plugins: $(NVIM) $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 	$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall 2> /dev/null
 
 .PHONY: uninstall-vim-plugins
-uninstall-vim-plugins:
+-uninstall-vim-plugins:
 	@rm -rf $(HOME)/.vim/
 
 .PHONY: install-tool-versions
