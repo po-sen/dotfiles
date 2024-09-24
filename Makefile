@@ -5,6 +5,7 @@ GIT ?= /usr/bin/git
 CURL ?= /usr/bin/curl
 SUDO ?= /usr/bin/sudo
 BREW ?= /opt/homebrew/bin/brew
+BASH ?= /opt/homebrew/bin/bash
 NVIM ?= /opt/homebrew/bin/nvim
 ASDF ?= /opt/homebrew/bin/asdf
 
@@ -106,3 +107,12 @@ update: update-brewfile update-vim-plugins install-tool-versions
 .PHONY: clean
 clean: uninstall-tool-versions uninstall-vim-plugins uninstall-brewfile uninstall-homebrew
 	@rm -rf $(FILES)
+
+.PHONY: change-shell
+change-shell: $(FILES) $(BASH) $(SUDO)
+	grep -Fxq "$(BASH)" /etc/shells || echo "$(BASH)" | $(SUDO) tee -a /etc/shells
+	chsh -s $(BASH)
+
+.PHONY: revert-shell
+revert-shell:
+	chsh -s /bin/zsh
