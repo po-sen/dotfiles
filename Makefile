@@ -84,11 +84,13 @@ uninstall-vim-plugins:
 .PHONY: install-tool-versions
 install-tool-versions: $(FILES) $(ASDF)
 	$(ASDF) plugin add python
+	$(ASDF) plugin add nodejs
 	$(ASDF) install
 
 .PHONY: uninstall-tool-versions
 uninstall-tool-versions: $(FILES) $(ASDF)
 	$(ASDF) plugin remove python
+	$(ASDF) plugin remove nodejs
 
 .DEFAULT_GOAL := pull-remote
 .PHONY: pull-remote
