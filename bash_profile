@@ -1,4 +1,3 @@
-export BASH_SILENCE_DEPRECATION_WARNING=1
 export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:$PATH
 
 [[ -r "$HOME/.bashrc" ]] && . "$HOME/.bashrc"
