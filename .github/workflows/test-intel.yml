@@ -19,5 +19,5 @@ jobs:
         run: make install
       - name: Test make update
         run: make update
-      - name: Test make clean
-        run: make clean
+      - name: Test make uninstall
+        run: make uninstall

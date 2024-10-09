@@ -26,6 +26,10 @@ FILES += $(HOME)/.tool-versions
 $(HOME)/.tool-versions: $(PWD)/tool-versions
 	@ln -sf $(PWD)/tool-versions $@
 
+.PHONY: clean
+clean:
+	@rm -rf $(FILES)
+
 .PHONY: install-homebrew
 install-homebrew: $(FILES)
 	@/bin/bash -c "$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -38,8 +42,14 @@ uninstall-homebrew:
 .PHONY: install-brewfile
 install-brewfile: $(FILES) $(BREW)
 	$(BREW) update
+	$(BREW) bundle install --force --cleanup
+	$(BREW) list --versions
+
+.PHONY: update-brewfile
+update-brewfile: $(FILES) $(BREW)
+	$(BREW) update
 	$(BREW) bundle install --force
-	$(BREW) bundle dump --force --brews --casks --tap
+	$(BREW) bundle dump --force --brews --casks --taps
 	$(BREW) list --versions
 
 .PHONY: uninstall-brewfile
@@ -77,15 +87,14 @@ pull-remote:
 
 .PHONY: change-shell
 change-shell: $(FILES) $(BASH)
-	grep -Fxq "$(BASH)" /etc/shells || echo "$(BASH)" | sudo tee -a /etc/shells
+	@grep -Fxq "$(BASH)" /etc/shells || echo "$(BASH)" | sudo tee -a /etc/shells
 	chsh -s $(BASH)
 
 .PHONY: install
 install: install-homebrew install-brewfile install-vim-plugins install-tool-versions
 
 .PHONY: update
-update: install-brewfile install-vim-plugins install-tool-versions
+update: update-brewfile install-vim-plugins install-tool-versions
 
-.PHONY: clean
-clean: uninstall-tool-versions uninstall-vim-plugins uninstall-brewfile uninstall-homebrew
-	@rm -rf $(FILES)
+.PHONY: uninstall
+uninstall: uninstall-tool-versions uninstall-vim-plugins uninstall-brewfile uninstall-homebrew clean

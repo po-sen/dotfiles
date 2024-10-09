@@ -14,5 +14,5 @@ make update
 
 ## Uninstallation
 ```bash
-make clean
+make uninstall
 ```

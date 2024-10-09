@@ -4,7 +4,7 @@ tap "homebrew/services"
 brew "asdf"
 brew "bash"
 brew "bash-completion"
-brew "python@3.12", link: false
+brew "python@3.12"
 brew "glib"
 brew "cairo"
 brew "docker-compose"
