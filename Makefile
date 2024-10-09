@@ -2,9 +2,12 @@ SHELL := /bin/bash
 FILES :=
 
 BREW ?= /opt/homebrew/bin/brew
-BASH ?= /opt/homebrew/bin/bash
 NVIM ?= /opt/homebrew/bin/nvim
 ASDF ?= /opt/homebrew/bin/asdf
+BASH ?= /opt/homebrew/bin/bash
+
+NEWSHELL ?= $(BASH)
+
 
 FILES += $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim:
@@ -86,9 +89,9 @@ pull-remote:
 	@git reset --hard origin/$(shell git branch --show-current)
 
 .PHONY: change-shell
-change-shell: $(FILES) $(BASH)
-	@grep -Fxq "$(BASH)" /etc/shells || echo "$(BASH)" | sudo tee -a /etc/shells
-	chsh -s $(BASH)
+change-shell: $(FILES) $(NEWSHELL)
+	@grep -Fxq "$(NEWSHELL)" /etc/shells || echo "$(NEWSHELL)" | sudo tee -a /etc/shells
+	chsh -s $(NEWSHELL)
 
 .PHONY: install
 install: install-homebrew install-brewfile install-vim-plugins install-tool-versions
