@@ -29,12 +29,16 @@ FILES += $(HOME)/.tool-versions
 $(HOME)/.tool-versions: $(PWD)/tool-versions
 	@ln -sf $(PWD)/tool-versions $@
 
+
 .PHONY: clean
 clean:
 	@rm -rf $(FILES)
 
+.PHONY: init
+init: $(FILES)
+
 .PHONY: install-homebrew
-install-homebrew: $(FILES)
+install-homebrew:
 	@/bin/bash -c "$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 .PHONY: uninstall-homebrew
@@ -43,13 +47,13 @@ uninstall-homebrew:
 	@sudo rm -rf /opt/homebrew/
 
 .PHONY: install-brewfile
-install-brewfile: $(FILES) $(BREW)
+install-brewfile: $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force --cleanup
 	$(BREW) list --versions
 
 .PHONY: update-brewfile
-update-brewfile: $(FILES) $(BREW)
+update-brewfile: $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force
 	$(BREW) bundle dump --force --brews --casks --taps
@@ -64,7 +68,7 @@ uninstall-brewfile: $(BREW)
 	fi;
 
 .PHONY: install-vim-plugins
-install-vim-plugins: $(FILES) $(NVIM)
+install-vim-plugins: $(NVIM) $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 	$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall 2> /dev/null
 
 .PHONY: uninstall-vim-plugins
@@ -72,13 +76,13 @@ uninstall-vim-plugins:
 	@rm -rf $(HOME)/.vim/plugged/*
 
 .PHONY: install-tool-versions
-install-tool-versions: $(FILES) $(ASDF) $(PWD)/tool-versions
-	@cut -d' ' -f1 $(PWD)/tool-versions|xargs -I{} $(ASDF) plugin add {}
+install-tool-versions: $(ASDF) $(HOME)/.tool-versions
+	@cut -d' ' -f1 $(HOME)/.tool-versions|xargs -I{} $(ASDF) plugin add {}
 	$(ASDF) install
 
 .PHONY: uninstall-tool-versions
-uninstall-tool-versions: $(FILES) $(ASDF) $(PWD)/tool-versions
-	@cut -d' ' -f1 $(PWD)/tool-versions|xargs -I{} $(ASDF) plugin remove {}
+uninstall-tool-versions: $(ASDF) $(HOME)/.tool-versions
+	@cut -d' ' -f1 $(HOME)/.tool-versions|xargs -I{} $(ASDF) plugin remove {}
 
 .DEFAULT_GOAL := pull-remote
 .PHONY: pull-remote
@@ -89,15 +93,15 @@ pull-remote:
 	@git reset --hard origin/$(shell git branch --show-current)
 
 .PHONY: change-shell
-change-shell: $(FILES) $(NEWSHELL)
+change-shell: $(NEWSHELL)
 	@grep -Fxq "$(NEWSHELL)" /etc/shells || echo "$(NEWSHELL)" | sudo tee -a /etc/shells
 	chsh -s $(NEWSHELL)
 
 .PHONY: install
-install: install-homebrew install-brewfile install-vim-plugins install-tool-versions
+install: init install-homebrew install-brewfile install-vim-plugins install-tool-versions
 
 .PHONY: update
-update: update-brewfile install-vim-plugins install-tool-versions
+update: init update-brewfile install-vim-plugins install-tool-versions
 
 .PHONY: uninstall
 uninstall: uninstall-tool-versions uninstall-vim-plugins uninstall-brewfile uninstall-homebrew clean
