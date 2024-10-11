@@ -57,7 +57,6 @@ update-brewfile: $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force
 	$(BREW) bundle dump --force --brews --casks --taps
-	$(BREW) list --versions
 
 .PHONY: uninstall-brewfile
 uninstall-brewfile: $(BREW)
@@ -77,12 +76,13 @@ uninstall-vim-plugins:
 
 .PHONY: install-tool-versions
 install-tool-versions: $(ASDF) $(HOME)/.tool-versions
-	@cut -d' ' -f1 $(HOME)/.tool-versions|xargs -I{} $(ASDF) plugin add {}
+	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin add {}
+	$(ASDF) plugin update --all
 	$(ASDF) install
 
 .PHONY: uninstall-tool-versions
 uninstall-tool-versions: $(ASDF) $(HOME)/.tool-versions
-	@cut -d' ' -f1 $(HOME)/.tool-versions|xargs -I{} $(ASDF) plugin remove {}
+	@$(ASDF) plugin list | grep -v '^*$$' | xargs -rI{} $(ASDF) plugin remove {}
 
 .DEFAULT_GOAL := pull-remote
 .PHONY: pull-remote
