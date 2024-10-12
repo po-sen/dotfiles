@@ -50,7 +50,6 @@ uninstall-homebrew:
 install-brewfile: $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force --cleanup
-	$(BREW) list --versions
 
 .PHONY: update-brewfile
 update-brewfile: $(BREW)
@@ -72,7 +71,7 @@ install-vim-plugins: $(NVIM) $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim
 
 .PHONY: uninstall-vim-plugins
 uninstall-vim-plugins:
-	@rm -rf $(HOME)/.vim/plugged/*
+	@rm -rf $(HOME)/.vim/
 
 .PHONY: install-tool-versions
 install-tool-versions: $(ASDF) $(HOME)/.tool-versions
