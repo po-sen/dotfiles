@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           - {name: 'macOS', os: 'macos-latest'}
-          - {name: 'macOS Ventura', os: 'macos-13'}
+          # - {name: 'macOS Ventura', os: 'macos-13'}
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
