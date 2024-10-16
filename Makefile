@@ -76,8 +76,8 @@ uninstall-vim-plugins:
 .PHONY: install-tool-versions
 install-tool-versions: $(ASDF) $(HOME)/.tool-versions
 	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin add {}
-	$(ASDF) plugin update --all
-	$(ASDF) install
+	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin update {}
+	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) install {}
 
 .PHONY: uninstall-tool-versions
 uninstall-tool-versions: $(ASDF) $(HOME)/.tool-versions
