@@ -1,0 +1,7 @@
+tap "homebrew/bundle"
+brew "asdf"
+brew "bash"
+brew "bash-completion"
+brew "git"
+brew "make"
+brew "neovim"
