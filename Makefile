@@ -4,9 +4,8 @@ FILES :=
 BREW ?= $(shell brew --prefix)/bin/brew
 NVIM ?= $(shell brew --prefix)/bin/nvim
 ASDF ?= $(shell brew --prefix)/bin/asdf
-BASH ?= $(shell brew --prefix)/bin/bash
 
-NEWSHELL ?= $(BASH)
+NEWSHELL ?= $(shell brew --prefix)/bin/bash
 
 
 FILES += $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
@@ -53,12 +52,14 @@ uninstall-homebrew:
 install-brewfile: $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force --cleanup
+	@chmod -R go-w "$(shell brew --prefix)/share"
 
 .PHONY: update-brewfile
 update-brewfile: $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force
 	$(BREW) bundle dump --force --brews --casks --taps
+	@chmod -R go-w "$(shell brew --prefix)/share"
 
 .PHONY: uninstall-brewfile
 uninstall-brewfile: $(BREW)
