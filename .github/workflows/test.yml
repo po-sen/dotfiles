@@ -1,15 +1,21 @@
 name: Test
 on:
   push:
-    branches-ignore:
-      - 'intel/**'
+    branches:
+      - '*'
   pull_request:
-    branches-ignore:
-      - 'intel/**'
+    branches:
+      - '*'
 jobs:
   test:
-    name: 'macOS'
-    runs-on: 'macos-latest'
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: 'macOS', os: 'macos-latest'}
+          - {name: 'macOS Ventura', os: 'macos-13'}
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4

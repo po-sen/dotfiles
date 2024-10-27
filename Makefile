@@ -1,10 +1,10 @@
-SHELL := /bin/bash
+SHELL := bash
 FILES :=
 
-BREW ?= /opt/homebrew/bin/brew
-NVIM ?= /opt/homebrew/bin/nvim
-ASDF ?= /opt/homebrew/bin/asdf
-BASH ?= /opt/homebrew/bin/bash
+BREW ?= $(shell brew --prefix)/bin/brew
+NVIM ?= $(shell brew --prefix)/bin/nvim
+ASDF ?= $(shell brew --prefix)/bin/asdf
+BASH ?= $(shell brew --prefix)/bin/bash
 
 NEWSHELL ?= $(BASH)
 
@@ -20,6 +20,10 @@ $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(PWD)/vimrc
 FILES += $(HOME)/.bash_profile
 $(HOME)/.bash_profile: $(PWD)/bash_profile
 	@ln -sf $(PWD)/bash_profile $@
+
+FILES += $(HOME)/.zprofile
+$(HOME)/.zprofile: $(PWD)/zprofile
+	@ln -sf $(PWD)/zprofile $@
 
 FILES += $(HOME)/.gitconfig
 $(HOME)/.gitconfig: $(PWD)/gitconfig
@@ -44,7 +48,6 @@ install-homebrew:
 .PHONY: uninstall-homebrew
 uninstall-homebrew:
 	@/bin/bash -c "$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
-	@sudo rm -rf /opt/homebrew/
 
 .PHONY: install-brewfile
 install-brewfile: $(BREW)

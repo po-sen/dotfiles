@@ -1,4 +1,4 @@
-[[ -r "$HOME/.bashrc" ]] && . "$HOME/.bashrc"
+[[ -r "$HOME/.zshrc" ]] && . "$HOME/.zshrc"
 
 [[ -r "/opt/homebrew/bin/brew" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
 [[ -r "/opt/homebrew/opt/asdf/libexec/asdf.sh" ]] && . "/opt/homebrew/opt/asdf/libexec/asdf.sh"
