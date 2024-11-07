@@ -58,7 +58,7 @@ install-brewfile: $(BREW)
 update-brewfile: $(BREW)
 	$(BREW) update
 	$(BREW) bundle install --force
-	$(BREW) bundle dump --force --brews --casks --taps
+	$(BREW) bundle dump --force --brews --casks --taps --vscode
 	@chmod -R go-w "$(shell brew --prefix)/share"
 
 .PHONY: uninstall-brewfile
