@@ -1,7 +1,7 @@
 [alias]
 	cp = cherry-pick
 	fp = fetch -pPt
-	tree = log --all --decorate --oneline --graph
+	tree = log --branches --decorate --oneline --graph
 	bb = "!git branch --sort=-committerdate | awk -v current=\"$(git symbolic-ref --short HEAD)\" '$0 ~ (\"^\\\\* \" current) {p=1; next} p'"
 [branch]
 	sort = -committerdate
