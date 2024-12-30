@@ -87,7 +87,6 @@ install-tool-versions: $(ASDF) $(HOME)/.tool-versions
 uninstall-tool-versions: $(ASDF) $(HOME)/.tool-versions
 	@$(ASDF) plugin list | grep -v '^*$$' | xargs -rI{} $(ASDF) plugin remove {}
 
-.DEFAULT_GOAL := pull-remote
 .PHONY: pull-remote
 pull-remote:
 	@git config remote.origin.url git@github.com:po-sen/dotfiles.git
@@ -103,6 +102,7 @@ change-shell: $(NEWSHELL)
 .PHONY: install
 install: init install-homebrew install-brewfile install-vim-plugins install-tool-versions
 
+.DEFAULT_GOAL := update
 .PHONY: update
 update: init update-brewfile install-vim-plugins install-tool-versions
 
