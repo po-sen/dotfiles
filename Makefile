@@ -33,12 +33,12 @@ $(HOME)/.tool-versions: $(PWD)/tool-versions
 	@ln -sf $(PWD)/tool-versions $@
 
 
+.PHONY: init
+init: $(FILES)
+
 .PHONY: clean
 clean:
 	@rm -rf $(FILES)
-
-.PHONY: init
-init: $(FILES)
 
 .PHONY: install-homebrew
 install-homebrew:
@@ -49,20 +49,20 @@ uninstall-homebrew:
 	@/bin/bash -c "$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
 
 .PHONY: install-brewfile
-install-brewfile: $(BREW)
+install-brewfile:
 	$(BREW) update
 	$(BREW) bundle install --force --cleanup
 	@chmod -R go-w "$(shell brew --prefix)/share"
 
 .PHONY: update-brewfile
-update-brewfile: $(BREW)
+update-brewfile:
 	$(BREW) update
 	$(BREW) bundle install --force
 	$(BREW) bundle dump --force --brews --casks --taps --vscode
 	@chmod -R go-w "$(shell brew --prefix)/share"
 
 .PHONY: uninstall-brewfile
-uninstall-brewfile: $(BREW)
+uninstall-brewfile:
 	@set -euo pipefail; \
 	BREW_LIST=$$($(BREW) bundle list --all); \
 	if [[ -n "$$BREW_LIST" ]]; then \
@@ -70,7 +70,7 @@ uninstall-brewfile: $(BREW)
 	fi;
 
 .PHONY: install-vim-plugins
-install-vim-plugins: $(NVIM) $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
+install-vim-plugins: $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 	$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall 2> /dev/null
 
 .PHONY: uninstall-vim-plugins
@@ -78,15 +78,16 @@ uninstall-vim-plugins:
 	@rm -rf $(HOME)/.vim/
 
 .PHONY: install-tool-versions
-install-tool-versions: $(ASDF) $(HOME)/.tool-versions
+install-tool-versions: $(HOME)/.tool-versions
 	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin add {}
 	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin update {}
 	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) install {}
 
 .PHONY: uninstall-tool-versions
-uninstall-tool-versions: $(ASDF) $(HOME)/.tool-versions
+uninstall-tool-versions: $(HOME)/.tool-versions
 	@$(ASDF) plugin list | grep -v '^*$$' | xargs -rI{} $(ASDF) plugin remove {}
 
+.DEFAULT_GOAL := pull-remote
 .PHONY: pull-remote
 pull-remote:
 	@git config remote.origin.url git@github.com:po-sen/dotfiles.git
@@ -94,15 +95,15 @@ pull-remote:
 	@git fetch --force origin
 	@git reset --hard origin/$(shell git branch --show-current)
 
-.PHONY: change-shell
-change-shell: $(NEWSHELL)
+.PHONY: new-shell
+new-shell:
+	@ls $(NEWSHELL)
 	@grep -Fxq "$(NEWSHELL)" /etc/shells || echo "$(NEWSHELL)" | sudo tee -a /etc/shells
 	chsh -s $(NEWSHELL)
 
 .PHONY: install
 install: init install-homebrew install-brewfile install-vim-plugins install-tool-versions
 
-.DEFAULT_GOAL := update
 .PHONY: update
 update: init update-brewfile install-vim-plugins install-tool-versions
 
