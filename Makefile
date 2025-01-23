@@ -71,7 +71,7 @@ install-vim-plugins: $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim $(HOME)/.vim/a
 
 .PHONY: uninstall-vim-plugins
 uninstall-vim-plugins:
-	@rm -rf $(HOME)/.vimrc $(HOME)/.vim/ $(HOME)/.config/nvim/
+	@rm -rf $(HOME)/.vimrc $(HOME)/.vim/ $(HOME)/.config/nvim/*
 
 .PHONY: install-tool-versions
 install-tool-versions: $(HOME)/.tool-versions
