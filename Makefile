@@ -1,44 +1,40 @@
-SHELL := bash
-FILES :=
+SHELL := /bin/sh
 
-BREW ?= $(shell brew --prefix)/bin/brew
-NVIM ?= $(shell brew --prefix)/bin/nvim
-ASDF ?= $(shell brew --prefix)/bin/asdf
+ifeq ($(shell /usr/bin/uname -m), arm64)
+HOMEBREW_PREFIX ?= /opt/homebrew
+else
+HOMEBREW_PREFIX ?= /usr/local
+endif
 
-NEWSHELL ?= $(shell brew --prefix)/bin/bash
+BREW ?= $(HOMEBREW_PREFIX)/bin/brew
+NVIM ?= $(HOMEBREW_PREFIX)/bin/nvim
+ASDF ?= $(HOMEBREW_PREFIX)/bin/asdf
+
+NEWSHELL ?= $(HOMEBREW_PREFIX)/bin/bash
 
 
-FILES += $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim:
 	@curl --silent --create-dirs -fLo $@ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
-FILES += $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim
 $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(PWD)/vimrc
-	@ln -sf $(PWD)/vimrc $@
+	@ln -sf $^ $@
 
-FILES += $(HOME)/.bash_profile
-$(HOME)/.bash_profile: $(PWD)/bash_profile
-	@ln -sf $(PWD)/bash_profile $@
 
-FILES += $(HOME)/.zprofile
-$(HOME)/.zprofile: $(PWD)/zprofile
-	@ln -sf $(PWD)/zprofile $@
-
-FILES += $(HOME)/.gitconfig
-$(HOME)/.gitconfig: $(PWD)/gitconfig
-	@ln -sf $(PWD)/gitconfig $@
-
-FILES += $(HOME)/.tool-versions
-$(HOME)/.tool-versions: $(PWD)/tool-versions
-	@ln -sf $(PWD)/tool-versions $@
-
+.DEFAULT_GOAL := pull-remote
+.PHONY: pull-remote
+pull-remote:
+	@git config remote.origin.url git@github.com:po-sen/dotfiles.git
+	@git config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
+	@git fetch --force origin
+	@git reset --hard origin/$(shell git branch --show-current)
 
 .PHONY: init
-init: $(FILES)
+init: $(PWD)/config/*
+	@$(foreach FILE, $^, ln -sf $(FILE) $(HOME)/.$(notdir $(FILE));)
 
 .PHONY: clean
-clean:
-	@rm -rf $(FILES)
+clean: $(PWD)/config/*
+	@$(foreach FILE, $^, rm -f $(HOME)/.$(notdir $(FILE));)
 
 .PHONY: install-homebrew
 install-homebrew:
@@ -70,12 +66,12 @@ uninstall-brewfile:
 	fi;
 
 .PHONY: install-vim-plugins
-install-vim-plugins: $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
+install-vim-plugins: $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 	$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall 2> /dev/null
 
 .PHONY: uninstall-vim-plugins
 uninstall-vim-plugins:
-	@rm -rf $(HOME)/.vim/
+	@rm -rf $(HOME)/.vimrc $(HOME)/.vim/ $(HOME)/.config/nvim/
 
 .PHONY: install-tool-versions
 install-tool-versions: $(HOME)/.tool-versions
@@ -87,25 +83,17 @@ install-tool-versions: $(HOME)/.tool-versions
 uninstall-tool-versions: $(HOME)/.tool-versions
 	@$(ASDF) plugin list | grep -v '^*$$' | xargs -rI{} $(ASDF) plugin remove {}
 
-.DEFAULT_GOAL := pull-remote
-.PHONY: pull-remote
-pull-remote:
-	@git config remote.origin.url git@github.com:po-sen/dotfiles.git
-	@git config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
-	@git fetch --force origin
-	@git reset --hard origin/$(shell git branch --show-current)
-
-.PHONY: new-shell
-new-shell:
+.PHONY: newshell
+newshell:
 	@ls $(NEWSHELL)
 	@grep -Fxq "$(NEWSHELL)" /etc/shells || echo "$(NEWSHELL)" | sudo tee -a /etc/shells
 	chsh -s $(NEWSHELL)
 
 .PHONY: install
-install: init install-homebrew install-brewfile install-vim-plugins install-tool-versions
+install: install-homebrew install-brewfile install-vim-plugins install-tool-versions
 
 .PHONY: update
-update: init update-brewfile install-vim-plugins install-tool-versions
+update: update-brewfile install-vim-plugins install-tool-versions
 
 .PHONY: uninstall
-uninstall: uninstall-tool-versions uninstall-vim-plugins uninstall-brewfile uninstall-homebrew clean
+uninstall: uninstall-tool-versions uninstall-vim-plugins uninstall-brewfile uninstall-homebrew
