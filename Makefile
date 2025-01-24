@@ -20,6 +20,9 @@ $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(PWD)/vimrc
 	@mkdir -p $(dir $@)
 	@ln -sf $^ $@
 
+$(HOME)/.tool-versions: $(PWD)/tool-versions
+	@ln -sf $^ $@
+
 
 .DEFAULT_GOAL := pull-remote
 .PHONY: pull-remote
