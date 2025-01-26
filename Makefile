@@ -38,7 +38,7 @@ init: $(PWD)/config/*
 
 .PHONY: clean
 clean: $(PWD)/config/*
-	@$(foreach FILE, $^, rm -f $(HOME)/.$(notdir $(FILE));)
+	@$(foreach FILE, $^, $(RM) $(HOME)/.$(notdir $(FILE));)
 
 .PHONY: install-homebrew
 install-homebrew:
@@ -77,7 +77,7 @@ install-vim-plugins: $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim $(HOME)/.vim/a
 
 .PHONY: uninstall-vim-plugins
 uninstall-vim-plugins:
-	@rm -rf $(HOME)/.vimrc $(HOME)/.vim/ $(HOME)/.config/nvim/
+	@$(RM) -r $(HOME)/.vimrc $(HOME)/.vim/ $(HOME)/.config/nvim/
 
 .PHONY: install-tool-versions
 install-tool-versions: $(HOME)/.tool-versions
@@ -88,6 +88,7 @@ install-tool-versions: $(HOME)/.tool-versions
 .PHONY: uninstall-tool-versions
 uninstall-tool-versions: $(HOME)/.tool-versions
 	@$(ASDF) plugin list | grep -v '^*$$' | xargs -rI{} $(ASDF) plugin remove {}
+	@$(RM) $(HOME)/.tool-versions
 
 .PHONY: newshell
 newshell:
