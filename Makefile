@@ -6,11 +6,14 @@ else
 HOMEBREW_PREFIX ?= /usr/local
 endif
 
+NEWSHELL ?= $(HOMEBREW_PREFIX)/bin/bash
+
 BREW ?= $(HOMEBREW_PREFIX)/bin/brew
 NVIM ?= $(HOMEBREW_PREFIX)/bin/nvim
 ASDF ?= $(HOMEBREW_PREFIX)/bin/asdf
 
-NEWSHELL ?= $(HOMEBREW_PREFIX)/bin/bash
+INIT_BREW ?= eval "$$($(BREW) shellenv)"
+INIT_ASDF ?= . "$(HOMEBREW_PREFIX)/opt/asdf/libexec/asdf.sh"
 
 
 $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim:
@@ -51,22 +54,22 @@ uninstall-homebrew:
 .PHONY: install-brewfile
 install-brewfile:
 	$(BREW) update
-	$(BREW) bundle install --force --cleanup
-	@chmod -R go-w "$(shell brew --prefix)/share"
+	$(INIT_BREW) && $(BREW) bundle install --force --cleanup
+	@chmod -R go-w "$(HOMEBREW_PREFIX)/share"
 
 .PHONY: update-brewfile
 update-brewfile:
 	$(BREW) update
-	$(BREW) bundle install --force
-	$(BREW) bundle dump --force --brews --casks --taps --vscode
+	$(INIT_BREW) && $(BREW) bundle install --force
+	$(INIT_BREW) && $(BREW) bundle dump --force --brews --casks --taps --vscode
 	$(BREW) upgrade
 	$(BREW) cleanup
-	@chmod -R go-w "$(shell brew --prefix)/share"
+	@chmod -R go-w "$(HOMEBREW_PREFIX)/share"
 
 .PHONY: uninstall-brewfile
 uninstall-brewfile:
 	@set -euo pipefail; \
-	BREW_LIST=$$($(BREW) bundle list --all); \
+	BREW_LIST=$$($(BREW) bundle list); \
 	if [[ -n "$$BREW_LIST" ]]; then \
 		$(BREW) uninstall --force --ignore-dependencies $$BREW_LIST; \
 	fi;
@@ -83,7 +86,7 @@ uninstall-vim-plugins:
 install-tool-versions: $(HOME)/.tool-versions
 	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin add {}
 	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin update {}
-	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) install {}
+	@$(INIT_ASDF) && cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) install {}
 
 .PHONY: uninstall-tool-versions
 uninstall-tool-versions: $(HOME)/.tool-versions
