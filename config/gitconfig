@@ -1,8 +1,11 @@
 [alias]
+	st = status
+	co = checkout
+	br = branch
 	cp = cherry-pick
 	fp = fetch -pPt
-	tree = log --branches --decorate --oneline --graph
-	bb = "!git branch --sort=-committerdate | awk -v current=\"$(git symbolic-ref --short HEAD)\" '$0 ~ (\"^\\\\* \" current) {p=1; next} p'"
+	tree = log --decorate --oneline --graph
+	bb = !git branch --merged HEAD | grep -v \"^\\*\"
 [branch]
 	sort = -committerdate
 [core]
