@@ -75,11 +75,11 @@ uninstall-brewfile:
 	fi;
 
 .PHONY: install-vim-plugins
-install-vim-plugins: $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
+-install-vim-plugins: $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 	$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall 2> /dev/null
 
 .PHONY: uninstall-vim-plugins
-uninstall-vim-plugins:
+-uninstall-vim-plugins:
 	@$(RM) -r $(HOME)/.vimrc $(HOME)/.vim/ $(HOME)/.config/nvim/
 
 .PHONY: install-tool-versions
