@@ -1,4 +1,3 @@
-tap "homebrew/bundle"
 tap "po-sen/tap"
 brew "bash"
 brew "bash-completion@2"
