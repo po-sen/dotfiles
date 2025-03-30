@@ -13,7 +13,6 @@ NVIM ?= $(HOMEBREW_PREFIX)/bin/nvim
 ASDF ?= $(HOMEBREW_PREFIX)/bin/asdf
 
 INIT_BREW ?= eval "$$($(BREW) shellenv)"
-INIT_ASDF ?= . "$(HOMEBREW_PREFIX)/opt/asdf/libexec/asdf.sh"
 
 
 $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim:
@@ -86,7 +85,7 @@ uninstall-vim-plugins:
 install-tool-versions: $(HOME)/.tool-versions
 	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin add {}
 	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin update {}
-	@$(INIT_ASDF) && cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) install {}
+	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) install {}
 
 .PHONY: uninstall-tool-versions
 uninstall-tool-versions: $(HOME)/.tool-versions
