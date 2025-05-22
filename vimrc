@@ -130,6 +130,7 @@ xmap ga <Plug>(EasyAlign)
 nmap <leader>] <Plug>(GitGutterNextHunk)
 nmap <leader>[ <Plug>(GitGutterPrevHunk)
 nmap gu <Plug>(GitGutterUndoHunk)
+nmap gi <Plug>(GitGutterStageHunk)
 
 nnoremap U :UndotreeToggle<cr>
 
@@ -137,7 +138,8 @@ nnoremap <tab> :NERDTreeMirror<cr>:NERDTreeToggle<cr>
 nnoremap <leader>git :Git
 nnoremap <leader><tab> :GFiles<cr>
 
-nnoremap gs :Gvdiffsplit<cr>
+nnoremap gh :Ghdiffsplit<cr>
+nnoremap gv :Gvdiffsplit<cr>
 nnoremap gr :Gread<cr>
 nnoremap gw :Gwrite<cr>
 
