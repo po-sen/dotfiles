@@ -4,6 +4,7 @@
 	br = branch
 	cp = cherry-pick
 	fp = fetch -pPt
+	amend = commit --amend --reset-author --no-edit
 	tree = log --decorate --oneline --graph
 	bb = !git branch --merged HEAD | grep -v \"^\\*\"
 [branch]
