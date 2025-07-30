@@ -175,6 +175,7 @@ autocmd BufNewFile,BufRead Dockerfile*  set filetype=dockerfile
 autocmd BufNewFile,BufRead gitconfig*   set filetype=gitconfig
 autocmd BufNewFile,BufRead Jenkinsfile* set filetype=Jenkinsfile
 autocmd BufNewFile,BufRead bash_profile set filetype=sh
+autocmd BufNewFile,BufRead .env*        set filetype=sh
 
 autocmd Filetype cpp         setlocal commentstring=//\ %s
 autocmd Filetype gitconfig   setlocal commentstring=#\ %s noexpandtab
