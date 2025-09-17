@@ -3,10 +3,11 @@
 	co = checkout
 	br = branch
 	cp = cherry-pick
-	fp = fetch -pPt
+	fp = fetch -pt --all
 	amend = commit --amend --reset-author --no-edit
 	tree = log --decorate --oneline --graph
 	bb = !git branch --merged HEAD | grep -v \"^\\*\"
+	codex = !git branch --format='%(refname:short)' --list 'codex/*' '*-codex/*'
 [branch]
 	sort = -committerdate
 [core]
@@ -14,5 +15,5 @@
 [init]
 	defaultBranch = master
 [user]
-	email = posen2101024@gmail.com
+	email = posen.chiu@pentium.network
 	name = Posen
