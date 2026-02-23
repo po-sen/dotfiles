@@ -9,6 +9,8 @@
 [[ -r "/usr/local/opt/asdf/libexec/asdf.sh" ]] && . "/usr/local/opt/asdf/libexec/asdf.sh"
 [[ -r "/usr/local/etc/profile.d/bash_completion.sh" ]] && . "/usr/local/etc/profile.d/bash_completion.sh"
 
+export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
+
 alias vi='nvim -p'
 alias vim='vim -p'
 
