@@ -1,108 +1,72 @@
 SHELL := /bin/sh
 
-ifeq ($(shell /usr/bin/uname -m), arm64)
+ifeq ($(shell /usr/bin/uname -m),arm64)
 HOMEBREW_PREFIX ?= /opt/homebrew
 else
 HOMEBREW_PREFIX ?= /usr/local
 endif
 
-NEWSHELL ?= $(HOMEBREW_PREFIX)/bin/bash
+ROOT := $(CURDIR)
+CONFIG_DIR := $(ROOT)/config
+CONFIG_FILES := $(wildcard $(CONFIG_DIR)/*)
+CONFIG_LINKS := $(patsubst $(CONFIG_DIR)/%,$(HOME)/.%,$(CONFIG_FILES))
 
-BREW ?= $(HOMEBREW_PREFIX)/bin/brew
-NVIM ?= $(HOMEBREW_PREFIX)/bin/nvim
-ASDF ?= $(HOMEBREW_PREFIX)/bin/asdf
+BREW := $(HOMEBREW_PREFIX)/bin/brew
+NVIM := $(HOMEBREW_PREFIX)/bin/nvim
+ASDF := $(HOMEBREW_PREFIX)/bin/asdf
 
-INIT_BREW ?= eval "$$($(BREW) shellenv)"
+DOTFILES := $(CONFIG_LINKS) $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim $(HOME)/.tool-versions
+VIM_PLUGS := $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 
+.DEFAULT_GOAL := help
 
-$(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim:
+.PHONY: help install update uninstall
+
+help: ## Show available targets
+	@awk 'BEGIN {FS = ":.*## "; print "Available targets:"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+$(HOME)/.%: $(CONFIG_DIR)/%
+	@ln -sf $< $@
+
+$(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(ROOT)/vimrc
+	@mkdir -p $(dir $@)
+	@ln -sf $< $@
+
+$(VIM_PLUGS):
 	@curl --silent --create-dirs -fLo $@ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
-$(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(PWD)/vimrc
-	@mkdir -p $(dir $@)
-	@ln -sf $^ $@
+$(HOME)/.tool-versions: $(ROOT)/tool-versions
+	@ln -sf $< $@
 
-$(HOME)/.tool-versions: $(PWD)/tool-versions
-	@ln -sf $^ $@
+install: $(DOTFILES) $(VIM_PLUGS) ## Install Brewfile packages, Vim plugins, and asdf tools
+	@if [ ! -x "$(BREW)" ]; then /bin/bash -c "$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; fi
+	@$(BREW) bundle install --file="$(ROOT)/Brewfile" --force --cleanup
+	@$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall
+	@set -eu; \
+		awk 'NF && $$1 !~ /^#/ { print $$1 }' "$(HOME)/.tool-versions" | while IFS= read -r plugin; do \
+			$(ASDF) plugin list | grep -Fxq "$$plugin" || $(ASDF) plugin add "$$plugin"; \
+		done; \
+		$(ASDF) install
 
+update: $(DOTFILES) $(VIM_PLUGS) ## Update Brewfile packages, Vim plugins, and asdf tools
+	@$(BREW) update
+	@$(BREW) bundle install --file="$(ROOT)/Brewfile" --force --cleanup
+	@$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall
+	@set -eu; \
+		awk 'NF && $$1 !~ /^#/ { print $$1 }' "$(HOME)/.tool-versions" | while IFS= read -r plugin; do \
+			$(ASDF) plugin list | grep -Fxq "$$plugin" || $(ASDF) plugin add "$$plugin"; \
+		done; \
+		$(ASDF) install
 
-.DEFAULT_GOAL := pull-remote
-.PHONY: pull-remote
-pull-remote:
-	@git config remote.origin.url git@github.com:po-sen/dotfiles.git
-	@git config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
-	@git fetch --force origin
-	@git reset --hard origin/$(shell git branch --show-current)
-
-.PHONY: init
-init: $(PWD)/config/*
-	@$(foreach FILE, $^, ln -sf $(FILE) $(HOME)/.$(notdir $(FILE));)
-
-.PHONY: clean
-clean: $(PWD)/config/*
-	@$(foreach FILE, $^, $(RM) $(HOME)/.$(notdir $(FILE));)
-
-.PHONY: install-homebrew
-install-homebrew:
-	@/bin/bash -c "$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-.PHONY: uninstall-homebrew
-uninstall-homebrew:
-	@/bin/bash -c "$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
-
-.PHONY: install-brewfile
-install-brewfile:
-	$(BREW) update
-	$(INIT_BREW) && $(BREW) bundle install --force --cleanup
-	@chmod -R go-w "$(HOMEBREW_PREFIX)/share"
-
-.PHONY: update-brewfile
-update-brewfile:
-	$(BREW) update
-	$(INIT_BREW) && $(BREW) bundle install --force
-	$(INIT_BREW) && $(BREW) bundle dump --force --brews --casks --taps --vscode
-	$(BREW) upgrade
-	$(BREW) cleanup
-	@chmod -R go-w "$(HOMEBREW_PREFIX)/share"
-
-.PHONY: uninstall-brewfile
-uninstall-brewfile:
-	@set -euo pipefail; \
-	BREW_LIST=$$($(BREW) bundle list); \
-	if [[ -n "$$BREW_LIST" ]]; then \
-		$(BREW) uninstall --force --ignore-dependencies $$BREW_LIST; \
-	fi;
-
-.PHONY: install-vim-plugins
-install-vim-plugins: $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
-	$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall 2> /dev/null
-
-.PHONY: uninstall-vim-plugins
-uninstall-vim-plugins:
-	@$(RM) -r $(HOME)/.vimrc $(HOME)/.vim/ $(HOME)/.config/nvim/
-
-.PHONY: install-tool-versions
-install-tool-versions: $(HOME)/.tool-versions
-	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin add {}
-	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) plugin update {}
-	@cut -d' ' -f1 $(HOME)/.tool-versions | xargs -rI{} $(ASDF) install {}
-
-.PHONY: uninstall-tool-versions
-uninstall-tool-versions: $(HOME)/.tool-versions
-	@$(ASDF) plugin list | grep -v '^*$$' | xargs -rI{} $(ASDF) plugin remove {}
-	@$(RM) $(HOME)/.tool-versions
-
-.PHONY: newshell
-newshell:
-	@ls $(NEWSHELL)
-	@grep -Fxq "$(NEWSHELL)" /etc/shells || echo "$(NEWSHELL)" | sudo tee -a /etc/shells
-	chsh -s $(NEWSHELL)
-
-.PHONY: install
-install: install-homebrew install-brewfile install-vim-plugins install-tool-versions
-
-.PHONY: update
-update: update-brewfile install-vim-plugins install-tool-versions
-
-.PHONY: uninstall
-uninstall: uninstall-tool-versions uninstall-vim-plugins uninstall-brewfile uninstall-homebrew
+uninstall: ## Remove repo-managed dotfiles plus Vim and asdf state
+	@for file in $(CONFIG_FILES); do \
+		rm -f "$(HOME)/.$$(basename "$$file")"; \
+	done
+	@$(RM) "$(HOME)/.vimrc" "$(HOME)/.tool-versions"
+	@$(RM) -r "$(HOME)/.vim" "$(HOME)/.config/nvim"
+	@if [ -x "$(ASDF)" ]; then \
+		$(ASDF) plugin list | while IFS= read -r plugin; do \
+			[ -n "$$plugin" ] || continue; \
+			$(ASDF) plugin remove "$$plugin"; \
+		done; \
+	fi
