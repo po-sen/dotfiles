@@ -27,6 +27,10 @@ def brewfiles_dir
   repo_root.join("brewfiles")
 end
 
+def tool_versions_dir
+  repo_root.join("tool-versions")
+end
+
 def default_brewfile_path
   brewfiles_dir.join("default.rb")
 end
@@ -35,11 +39,26 @@ def device_brewfile_path
   brewfiles_dir.join("#{device_id}.rb")
 end
 
+def default_tool_versions_path
+  tool_versions_dir.join("default")
+end
+
+def device_tool_versions_path
+  tool_versions_dir.join(device_id)
+end
+
+def ensure_device_copy!(default_path, device_path)
+  FileUtils.mkdir_p(device_path.dirname)
+  FileUtils.cp(default_path, device_path) unless device_path.exist?
+  device_path
+end
+
 def ensure_device_brewfile!
-  FileUtils.mkdir_p(brewfiles_dir)
-  device_file = device_brewfile_path
-  FileUtils.cp(default_brewfile_path, device_file) unless device_file.exist?
-  device_file
+  ensure_device_copy!(default_brewfile_path, device_brewfile_path)
+end
+
+def ensure_device_tool_versions!
+  ensure_device_copy!(default_tool_versions_path, device_tool_versions_path)
 end
 
 load_brewfile(ensure_device_brewfile!) if respond_to?(:brew)

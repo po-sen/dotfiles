@@ -15,12 +15,12 @@ BREW := $(HOMEBREW_PREFIX)/bin/brew
 NVIM := $(HOMEBREW_PREFIX)/bin/nvim
 ASDF := $(HOMEBREW_PREFIX)/bin/asdf
 
-DOTFILES := $(CONFIG_LINKS) $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim $(HOME)/.tool-versions
+DOTFILES := $(CONFIG_LINKS) $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim
 VIM_PLUGS := $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync update teardown
+.PHONY: help sync update teardown tool-versions-link
 
 define ENSURE_BREW
 if [ ! -x "$(BREW)" ]; then \
@@ -46,15 +46,16 @@ $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(ROOT)/vimrc
 $(VIM_PLUGS):
 	@curl --silent --create-dirs -fLo $@ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
-$(HOME)/.tool-versions: $(ROOT)/tool-versions
-	@ln -sf $< $@
+tool-versions-link: $(ROOT)/Brewfile $(ROOT)/tool-versions/default
+	@tool_versions_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_tool_versions!')"; \
+		ln -sfn "$$tool_versions_file" "$(HOME)/.tool-versions"
 
-sync: $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile to the current machine
+sync: $(DOTFILES) $(VIM_PLUGS) tool-versions-link ## Apply this device's Brewfile and tool versions to the current machine
 	@$(ENSURE_BREW)
 	@$(BREW) bundle install --file="$(ROOT)/Brewfile" --force --cleanup
 	@if [ ! -x "$(NVIM)" ]; then echo "Neovim is not installed at $(NVIM). Run 'make sync' again after brew sync completes, or install neovim in your device Brewfile." >&2; exit 1; fi
 	@$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall
-	@if [ ! -x "$(ASDF)" ]; then echo "asdf is not installed at $(ASDF). Add 'brew \"asdf\"' to this device Brewfile or run brew sync again after fixing Homebrew state." >&2; exit 1; fi
+	@if [ ! -x "$(ASDF)" ]; then echo "asdf is not installed at $(ASDF). Add 'brew \"asdf\"' to this device Brewfile or run 'make sync' again after fixing Homebrew state." >&2; exit 1; fi
 	@set -eu; \
 		awk 'NF && $$1 !~ /^#/ { print $$1 }' "$(HOME)/.tool-versions" | while IFS= read -r plugin; do \
 			$(ASDF) plugin list | grep -Fxq "$$plugin" || $(ASDF) plugin add "$$plugin"; \
