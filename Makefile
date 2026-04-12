@@ -14,6 +14,8 @@ CONFIG_LINKS := $(patsubst $(CONFIG_DIR)/%,$(HOME)/.%,$(CONFIG_FILES))
 BREW := $(HOMEBREW_PREFIX)/bin/brew
 NVIM := $(HOMEBREW_PREFIX)/bin/nvim
 ASDF := $(HOMEBREW_PREFIX)/bin/asdf
+BREW_BUNDLE_FLAGS ?= --force --cleanup
+BREW_DUMP_FLAGS ?= --force --brews --casks --taps --vscode
 
 DOTFILES := $(CONFIG_LINKS) $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim
 VIM_PLUGS := $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
@@ -52,7 +54,7 @@ tool-versions-link: $(ROOT)/Brewfile $(ROOT)/tool-versions/default
 
 sync: $(DOTFILES) $(VIM_PLUGS) tool-versions-link ## Apply this device's Brewfile and tool versions to the current machine
 	@$(ENSURE_BREW)
-	@$(BREW) bundle install --file="$(ROOT)/Brewfile" --force --cleanup
+	@$(BREW) bundle install --file="$(ROOT)/Brewfile" $(BREW_BUNDLE_FLAGS)
 	@if [ ! -x "$(NVIM)" ]; then echo "Neovim is not installed at $(NVIM). Run 'make sync' again after brew sync completes, or install neovim in your device Brewfile." >&2; exit 1; fi
 	@$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall >/dev/null 2>&1
 	@if [ ! -x "$(ASDF)" ]; then echo "asdf is not installed at $(ASDF). Add 'brew \"asdf\"' to this device Brewfile or run 'make sync' again after fixing Homebrew state." >&2; exit 1; fi
@@ -65,7 +67,7 @@ sync: $(DOTFILES) $(VIM_PLUGS) tool-versions-link ## Apply this device's Brewfil
 update: ## Write installed Homebrew packages back to this device's Brewfile
 	@if [ ! -x "$(BREW)" ]; then echo "Homebrew is not installed at $(BREW). 'make update' requires an existing Homebrew installation to dump installed packages." >&2; exit 1; fi
 	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_brewfile!')"; \
-	$(BREW) bundle dump --file="$$device_file" --force --brews --casks --taps --vscode
+	$(BREW) bundle dump --file="$$device_file" $(BREW_DUMP_FLAGS)
 
 teardown: ## Remove repo-managed dotfiles plus Vim and asdf state
 	@for file in $(CONFIG_FILES); do \

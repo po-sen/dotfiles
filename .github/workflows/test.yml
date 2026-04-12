@@ -19,13 +19,60 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
-        with:
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
-      - name: Test make uninstall-homebrew
-        run: make uninstall-homebrew
-      - name: Test make install
-        run: make install
-      - name: Test make update
-        run: make update
-      - name: Test make uninstall
-        run: make uninstall
+      - name: Validate Brewfile syntax
+        run: ruby -c Brewfile
+      - name: Validate Make targets
+        run: |
+          make help
+          make -n sync
+          make -n update
+          make -n teardown
+      - name: Smoke test dotfiles lifecycle
+        env:
+          HOME: ${{ runner.temp }}/dotfiles-home
+          DOTFILES_DEVICE_ID: ci-smoke
+          BREW_BUNDLE_FLAGS: --force
+        run: |
+          set -euxo pipefail
+
+          mkdir -p "$HOME"
+          rm -f "brewfiles/${DOTFILES_DEVICE_ID}.rb" "tool-versions/${DOTFILES_DEVICE_ID}"
+
+          cat >"tool-versions/${DOTFILES_DEVICE_ID}" <<'EOF'
+          golang 1.25.7
+          EOF
+
+          make sync
+
+          test -L "$HOME/.bash_profile"
+          test -L "$HOME/.gitconfig"
+          test -L "$HOME/.zprofile"
+          test -L "$HOME/.vimrc"
+          test -L "$HOME/.config/nvim/init.vim"
+          test -L "$HOME/.tool-versions"
+          test -f "$HOME/.vim/autoload/plug.vim"
+          test -f "$HOME/.config/nvim/autoload/plug.vim"
+          test -f "brewfiles/${DOTFILES_DEVICE_ID}.rb"
+          test -f "tool-versions/${DOTFILES_DEVICE_ID}"
+          test "$(readlink "$HOME/.tool-versions")" = "$GITHUB_WORKSPACE/tool-versions/${DOTFILES_DEVICE_ID}"
+          grep -F 'brew "asdf"' "brewfiles/${DOTFILES_DEVICE_ID}.rb"
+          grep -F 'golang 1.25.7' "tool-versions/${DOTFILES_DEVICE_ID}"
+
+          make update
+
+          test -s "brewfiles/${DOTFILES_DEVICE_ID}.rb"
+          ruby -c "brewfiles/${DOTFILES_DEVICE_ID}.rb"
+          grep -F 'brew "asdf"' "brewfiles/${DOTFILES_DEVICE_ID}.rb"
+          brew bundle check --file="brewfiles/${DOTFILES_DEVICE_ID}.rb"
+
+          make teardown
+
+          test ! -e "$HOME/.bash_profile"
+          test ! -e "$HOME/.gitconfig"
+          test ! -e "$HOME/.zprofile"
+          test ! -e "$HOME/.vimrc"
+          test ! -e "$HOME/.config/nvim"
+          test ! -e "$HOME/.tool-versions"
+
+          rm -f "brewfiles/${DOTFILES_DEVICE_ID}.rb" "tool-versions/${DOTFILES_DEVICE_ID}"
+          test -z "$(git status --short)"

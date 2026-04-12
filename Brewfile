@@ -6,15 +6,23 @@ def load_brewfile(path)
   instance_eval(File.read(path), path.to_s)
 end
 
+def normalized_device_id(value)
+  slug = value.to_s.strip.downcase.gsub(/[^a-z0-9._-]+/, "-").gsub(/\A-+|-+\z/, "")
+  slug.empty? ? nil : slug
+end
+
 def device_id
+  override = normalized_device_id(ENV["DOTFILES_DEVICE_ID"])
+  return override if override
+
   ioreg = `ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null`
   uuid = ioreg[/\"IOPlatformUUID\" = \"([^\"]+)\"/, 1]
   return "device-#{Digest::SHA256.hexdigest(uuid)[0, 12]}" if uuid && !uuid.empty?
 
   name = `scutil --get LocalHostName 2>/dev/null`.strip
   name = `hostname -s 2>/dev/null`.strip if name.empty?
-  slug = name.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-+|-+\z/, "")
-  return "device-#{slug}" unless slug.empty?
+  slug = normalized_device_id(name)
+  return "device-#{slug}" if slug
 
   "device-local"
 end
