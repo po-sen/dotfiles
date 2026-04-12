@@ -51,10 +51,10 @@ $(VIM_PLUGS):
 sync: $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions to the current machine
 	@tool_versions_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_tool_versions!')"; \
 		ln -sfn "$$tool_versions_file" "$(HOME)/.tool-versions"
-	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_brewfile!')"; \
-		test -f "$$device_file"
 	@$(ENSURE_BREW)
-	@$(BREW) bundle install --file="$(ROOT)/Brewfile" $(BREW_BUNDLE_FLAGS)
+	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_brewfile!')"; \
+		test -f "$$device_file"; \
+		$(BREW) bundle install --file="$$device_file" $(BREW_BUNDLE_FLAGS)
 	@if [ ! -x "$(NVIM)" ]; then echo "Neovim is not installed at $(NVIM). Run 'make sync' again after brew sync completes, or install neovim in your device Brewfile." >&2; exit 1; fi
 	@$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall >/dev/null 2>&1
 	@if [ ! -x "$(ASDF)" ]; then echo "asdf is not installed at $(ASDF). Add 'brew \"asdf\"' to this device Brewfile or run 'make sync' again after fixing Homebrew state." >&2; exit 1; fi
