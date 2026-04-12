@@ -22,7 +22,7 @@ VIM_PLUGS := $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.v
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync update teardown tool-versions-link
+.PHONY: help sync update teardown
 
 define ENSURE_BREW
 if [ ! -x "$(BREW)" ]; then \
@@ -48,11 +48,11 @@ $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(ROOT)/vimrc
 $(VIM_PLUGS):
 	@curl --silent --create-dirs -fLo $@ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
-tool-versions-link: $(ROOT)/Brewfile $(ROOT)/tool-versions/default
+sync: $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions to the current machine
 	@tool_versions_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_tool_versions!')"; \
 		ln -sfn "$$tool_versions_file" "$(HOME)/.tool-versions"
-
-sync: $(DOTFILES) $(VIM_PLUGS) tool-versions-link ## Apply this device's Brewfile and tool versions to the current machine
+	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_brewfile!')"; \
+		test -f "$$device_file"
 	@$(ENSURE_BREW)
 	@$(BREW) bundle install --file="$(ROOT)/Brewfile" $(BREW_BUNDLE_FLAGS)
 	@if [ ! -x "$(NVIM)" ]; then echo "Neovim is not installed at $(NVIM). Run 'make sync' again after brew sync completes, or install neovim in your device Brewfile." >&2; exit 1; fi
