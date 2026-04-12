@@ -54,7 +54,7 @@ sync: $(DOTFILES) $(VIM_PLUGS) tool-versions-link ## Apply this device's Brewfil
 	@$(ENSURE_BREW)
 	@$(BREW) bundle install --file="$(ROOT)/Brewfile" --force --cleanup
 	@if [ ! -x "$(NVIM)" ]; then echo "Neovim is not installed at $(NVIM). Run 'make sync' again after brew sync completes, or install neovim in your device Brewfile." >&2; exit 1; fi
-	@$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall
+	@$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall >/dev/null 2>&1
 	@if [ ! -x "$(ASDF)" ]; then echo "asdf is not installed at $(ASDF). Add 'brew \"asdf\"' to this device Brewfile or run 'make sync' again after fixing Homebrew state." >&2; exit 1; fi
 	@set -eu; \
 		awk 'NF && $$1 !~ /^#/ { print $$1 }' "$(HOME)/.tool-versions" | while IFS= read -r plugin; do \
