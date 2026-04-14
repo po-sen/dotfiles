@@ -11,7 +11,9 @@ This auto-detects a stable per-device fingerprint, uses a file like
 if missing. It also keeps `.tool-versions` pointed at a matching
 `tool-versions/device-xxxxxxxxxxxx`, created from `tool-versions/default` if
 needed. It will install Homebrew first
-if Homebrew is not already present.
+if Homebrew is not already present, then ensure the login shell is the
+Homebrew-installed bash after `brew bundle install` completes
+(`/opt/homebrew/bin/bash` on Apple Silicon).
 
 ## Update
 ```bash

@@ -12,6 +12,7 @@ CONFIG_FILES := $(wildcard $(CONFIG_DIR)/*)
 CONFIG_LINKS := $(patsubst $(CONFIG_DIR)/%,$(HOME)/.%,$(CONFIG_FILES))
 
 BREW := $(HOMEBREW_PREFIX)/bin/brew
+HOMEBREW_BASH := $(HOMEBREW_PREFIX)/bin/bash
 NVIM := $(HOMEBREW_PREFIX)/bin/nvim
 ASDF := $(HOMEBREW_PREFIX)/bin/asdf
 BREW_BUNDLE_FLAGS ?= --force --cleanup
@@ -35,6 +36,26 @@ if [ ! -x "$(BREW)" ]; then \
 fi
 endef
 
+define ENSURE_PRIMARY_BASH
+if [ ! -x "$(HOMEBREW_BASH)" ]; then \
+	echo "Homebrew bash is not installed at $(HOMEBREW_BASH). Add 'brew \"bash\"' to this device Brewfile and run 'make sync' again." >&2; \
+	exit 1; \
+fi; \
+username="$$(id -un)"; \
+current_shell="$$(dscl . -read /Users/$$username UserShell 2>/dev/null | awk 'END { print $$2 }')"; \
+if [ -z "$$current_shell" ]; then \
+	current_shell="$${SHELL:-}"; \
+fi; \
+if [ "$$current_shell" != "$(HOMEBREW_BASH)" ]; then \
+	if ! grep -Fxq "$(HOMEBREW_BASH)" /etc/shells; then \
+		echo "Adding $(HOMEBREW_BASH) to /etc/shells (sudo may prompt for your password)..."; \
+		printf '%s\n' "$(HOMEBREW_BASH)" | sudo tee -a /etc/shells >/dev/null; \
+	fi; \
+	echo "Changing login shell to $(HOMEBREW_BASH)..."; \
+	chsh -s "$(HOMEBREW_BASH)"; \
+fi
+endef
+
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "; print "Available targets:"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
@@ -55,6 +76,7 @@ sync: $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions
 	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_brewfile!')"; \
 		test -f "$$device_file"; \
 		$(BREW) bundle install --file="$$device_file" $(BREW_BUNDLE_FLAGS)
+	@$(ENSURE_PRIMARY_BASH)
 	@if [ ! -x "$(NVIM)" ]; then echo "Neovim is not installed at $(NVIM). Run 'make sync' again after brew sync completes, or install neovim in your device Brewfile." >&2; exit 1; fi
 	@$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall >/dev/null 2>&1
 	@if [ ! -x "$(ASDF)" ]; then echo "asdf is not installed at $(ASDF). Add 'brew \"asdf\"' to this device Brewfile or run 'make sync' again after fixing Homebrew state." >&2; exit 1; fi
