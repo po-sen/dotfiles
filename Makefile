@@ -51,8 +51,8 @@ if [ "$$current_shell" != "$(HOMEBREW_BASH)" ]; then \
 		echo "Adding $(HOMEBREW_BASH) to /etc/shells (sudo may prompt for your password)..."; \
 		printf '%s\n' "$(HOMEBREW_BASH)" | sudo tee -a /etc/shells >/dev/null; \
 	fi; \
-	echo "Changing login shell to $(HOMEBREW_BASH)..."; \
-	chsh -s "$(HOMEBREW_BASH)"; \
+	echo "Changing login shell for $$username to $(HOMEBREW_BASH) (sudo may prompt for your password)..."; \
+	sudo chsh -s "$(HOMEBREW_BASH)" "$$username"; \
 fi
 endef
 

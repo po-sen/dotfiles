@@ -65,6 +65,7 @@ jobs:
 
           DEVICE_BREWFILE="$(ruby -e 'load "./Brewfile"; print ensure_device_brewfile!')"
           DEVICE_TOOL_VERSIONS="$(ruby -e 'load "./Brewfile"; print ensure_device_tool_versions!')"
+          EXPECTED_LOGIN_SHELL="$(brew --prefix)/bin/bash"
 
           make sync
 
@@ -79,6 +80,7 @@ jobs:
           test -f "$DEVICE_BREWFILE"
           test -f "$DEVICE_TOOL_VERSIONS"
           test "$(readlink "$HOME/.tool-versions")" = "$DEVICE_TOOL_VERSIONS"
+          test "$(dscl . -read /Users/$(id -un) UserShell | awk 'END { print $2 }')" = "$EXPECTED_LOGIN_SHELL"
           grep -F 'brew "asdf"' "$DEVICE_BREWFILE"
           grep -F 'golang 1.25.7' "$DEVICE_TOOL_VERSIONS"
 

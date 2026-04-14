@@ -13,7 +13,8 @@ if missing. It also keeps `.tool-versions` pointed at a matching
 needed. It will install Homebrew first
 if Homebrew is not already present, then ensure the login shell is the
 Homebrew-installed bash after `brew bundle install` completes
-(`/opt/homebrew/bin/bash` on Apple Silicon).
+(`/opt/homebrew/bin/bash` on Apple Silicon), using `sudo` when a shell change
+is needed.
 
 ## Update
 ```bash
