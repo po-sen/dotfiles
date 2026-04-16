@@ -1,0 +1,62 @@
+# ===== font =====
+font-family = ""
+font-family = Menlo
+font-family = PingFang TC
+font-size = 15
+
+# 避免缺少樣式時硬合成，減少 Codex TUI 字型怪掉的機率
+font-synthetic-style = false
+
+# macOS / Retina 觀感
+font-thicken = true
+font-thicken-strength = 35
+alpha-blending = native
+window-vsync = true
+
+# ===== colors =====
+background = #000000
+foreground = #E8E8E8
+background-opacity = 1
+window-theme = dark
+
+# ===== spacing =====
+# 拉開行距
+adjust-cell-height = 15%
+
+# 視窗邊界留白
+window-padding-x = 8
+window-padding-y = 6
+window-padding-balance = true
+window-padding-color = background
+
+# ===== cursor =====
+cursor-style = bar
+cursor-style-blink = true
+cursor-color = #E8E8E8
+adjust-cursor-thickness = 1
+
+# ===== splits =====
+# 不要讓沒 focus 的 pane 變灰
+unfocused-split-opacity = 1
+unfocused-split-fill = #000000
+
+# 分隔線明顯一點
+split-divider-color = #5A5A5A
+
+# ===== notifications =====
+shell-integration = detect
+notify-on-command-finish = unfocused
+notify-on-command-finish-action = no-bell,notify
+notify-on-command-finish-after = 10s
+
+# ===== bell =====
+bell-features = no-system,no-audio,no-attention,no-title,no-border
+
+# ===== iTerm-like split behavior =====
+# 右分割後自動 equalize
+keybind = cmd+d=new_split:right
+keybind = chain=equalize_splits
+
+# 下分割後自動 equalize
+keybind = shift+cmd+d=new_split:down
+keybind = chain=equalize_splits

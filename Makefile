@@ -8,8 +8,10 @@ endif
 
 ROOT := $(CURDIR)
 CONFIG_DIR := $(ROOT)/config
-CONFIG_FILES := $(wildcard $(CONFIG_DIR)/*)
+GHOSTTY_CONFIG_SOURCE := $(CONFIG_DIR)/ghostty
+CONFIG_FILES := $(filter-out $(GHOSTTY_CONFIG_SOURCE),$(wildcard $(CONFIG_DIR)/*))
 CONFIG_LINKS := $(patsubst $(CONFIG_DIR)/%,$(HOME)/.%,$(CONFIG_FILES))
+GHOSTTY_CONFIG_LINK := $(HOME)/.config/ghostty/config
 
 BREW := $(HOMEBREW_PREFIX)/bin/brew
 HOMEBREW_BASH := $(HOMEBREW_PREFIX)/bin/bash
@@ -18,7 +20,7 @@ ASDF := $(HOMEBREW_PREFIX)/bin/asdf
 BREW_BUNDLE_FLAGS ?= --force --cleanup
 BREW_DUMP_FLAGS ?= --force --brews --casks --taps --vscode
 
-DOTFILES := $(CONFIG_LINKS) $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim
+DOTFILES := $(CONFIG_LINKS) $(GHOSTTY_CONFIG_LINK) $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim
 VIM_PLUGS := $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 
 .DEFAULT_GOAL := help
@@ -62,6 +64,10 @@ help: ## Show available targets
 $(HOME)/.%: $(CONFIG_DIR)/%
 	@ln -sf $< $@
 
+$(GHOSTTY_CONFIG_LINK): $(GHOSTTY_CONFIG_SOURCE)
+	@mkdir -p $(dir $@)
+	@ln -sf $< $@
+
 $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(ROOT)/vimrc
 	@mkdir -p $(dir $@)
 	@ln -sf $< $@
@@ -95,6 +101,7 @@ teardown: ## Remove repo-managed dotfiles plus Vim and asdf state
 	@for file in $(CONFIG_FILES); do \
 		rm -f "$(HOME)/.$$(basename "$$file")"; \
 	done
+	@rm -f "$(GHOSTTY_CONFIG_LINK)"
 	@$(RM) "$(HOME)/.vimrc" "$(HOME)/.tool-versions"
 	@$(RM) -r "$(HOME)/.vim" "$(HOME)/.config/nvim"
 	@if [ -x "$(ASDF)" ]; then \
