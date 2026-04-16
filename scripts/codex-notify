@@ -97,7 +97,10 @@ monitor_codex_session() {
             *'"type":"task_complete"'*)
                 notify_task_complete
                 ;;
-            *'"type":"function_call"'*'"sandbox_permissions":"require_escalated"'*)
+        esac
+
+        case "$line" in
+            *'"type":"function_call"'*'sandbox_permissions'*'require_escalated'*)
                 notify_approval_required
                 ;;
         esac
