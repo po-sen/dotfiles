@@ -3,6 +3,10 @@ _codex_notify_repo_root="$(
     cd "$(dirname "$_codex_notify_config_path")/.." >/dev/null 2>&1 && pwd -P
 )"
 CODEX_NOTIFY_WRAPPER="$_codex_notify_repo_root/scripts/codex-notify"
+CODEX_NOTIFY_SOUND_DEFAULT="${CODEX_NOTIFY_SOUND_DEFAULT:-/System/Library/Sounds/Funk.aiff}"
+CODEX_APPROVAL_SOUND_DEFAULT="${CODEX_APPROVAL_SOUND_DEFAULT:-/System/Library/Sounds/Sosumi.aiff}"
+CODEX_APPROVAL_SOUND_DELAY_DEFAULT="${CODEX_APPROVAL_SOUND_DELAY_DEFAULT:-0.6}"
+CODEX_NOTIFY_POPUP_DEFAULT="${CODEX_NOTIFY_POPUP_DEFAULT:-1}"
 unset _codex_notify_config_path
 unset _codex_notify_repo_root
 
@@ -12,9 +16,10 @@ if [[ -x "$CODEX_NOTIFY_WRAPPER" ]]; then
     }
 
     codex() {
-        CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-/System/Library/Sounds/Funk.aiff}" \
-        CODEX_APPROVAL_SOUND="${CODEX_APPROVAL_SOUND:-/System/Library/Sounds/Submarine.aiff}" \
-        CODEX_NOTIFY_POPUP="${CODEX_NOTIFY_POPUP:-1}" \
+        CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-$CODEX_NOTIFY_SOUND_DEFAULT}" \
+        CODEX_APPROVAL_SOUND="${CODEX_APPROVAL_SOUND:-$CODEX_APPROVAL_SOUND_DEFAULT}" \
+        CODEX_APPROVAL_SOUND_DELAY="${CODEX_APPROVAL_SOUND_DELAY:-$CODEX_APPROVAL_SOUND_DELAY_DEFAULT}" \
+        CODEX_NOTIFY_POPUP="${CODEX_NOTIFY_POPUP:-$CODEX_NOTIFY_POPUP_DEFAULT}" \
         "$CODEX_NOTIFY_WRAPPER" "$@"
     }
 fi

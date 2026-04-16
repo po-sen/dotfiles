@@ -5,8 +5,12 @@ set -euo pipefail
 CODEX_BIN_DEFAULT="$(command -v codex)"
 CODEX_BIN="${CODEX_NOTIFY_CODEX_BIN:-$CODEX_BIN_DEFAULT}"
 CODEX_SESSIONS_DIR="${CODEX_NOTIFY_SESSIONS_DIR:-$HOME/.codex/sessions}"
-CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-/System/Library/Sounds/Glass.aiff}"
-CODEX_APPROVAL_SOUND="${CODEX_APPROVAL_SOUND:-/System/Library/Sounds/Hero.aiff}"
+CODEX_SHELL_SNAPSHOTS_DIR="${CODEX_NOTIFY_SHELL_SNAPSHOTS_DIR:-$HOME/.codex/shell_snapshots}"
+CODEX_NOTIFY_SESSION_STRATEGY="${CODEX_NOTIFY_SESSION_STRATEGY:-snapshot}"
+CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT="${CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT:-15}"
+CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-}"
+CODEX_APPROVAL_SOUND="${CODEX_APPROVAL_SOUND:-}"
+CODEX_APPROVAL_SOUND_DELAY="${CODEX_APPROVAL_SOUND_DELAY:-0}"
 CODEX_NOTIFY_POPUP="${CODEX_NOTIFY_POPUP:-1}"
 CODEX_NOTIFY_LOG_FILE="${CODEX_NOTIFY_LOG_FILE:-}"
 
@@ -31,7 +35,44 @@ is_interactive_codex() {
     esac
 }
 
+pick_session_snapshot() {
+    local marker_file="$1"
+    local run_marker="$2"
+    local candidate=""
+
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        if grep -Fq "declare -x CODEX_NOTIFY_RUN_MARKER=\"$run_marker\"" "$candidate" 2>/dev/null; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done < <(find "$CODEX_SHELL_SNAPSHOTS_DIR" -type f -name '*.sh' -newer "$marker_file" 2>/dev/null)
+
+    return 1
+}
+
+session_id_from_snapshot() {
+    local snapshot_path="$1"
+    local snapshot_name=""
+
+    snapshot_name="$(basename "$snapshot_path")"
+    printf '%s\n' "${snapshot_name%%.*}"
+}
+
 pick_session_file() {
+    local session_id="$1"
+    local candidate=""
+
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        printf '%s\n' "$candidate"
+        return 0
+    done < <(find "$CODEX_SESSIONS_DIR" -type f -name "*$session_id.jsonl" 2>/dev/null)
+
+    return 1
+}
+
+pick_latest_session_file() {
     local marker_file="$1"
     local newest=""
     local candidate=""
@@ -43,13 +84,130 @@ pick_session_file() {
         fi
     done < <(find "$CODEX_SESSIONS_DIR" -type f -name '*.jsonl' -newer "$marker_file" 2>/dev/null)
 
+    [ -n "$newest" ] || return 1
     printf '%s\n' "$newest"
+}
+
+new_run_marker() {
+    if command -v uuidgen >/dev/null 2>&1; then
+        uuidgen | tr '[:upper:]' '[:lower:]'
+    else
+        printf '%s\n' "codex-notify-$$-$RANDOM-$(date '+%s')"
+    fi
+}
+
+session_strategy() {
+    case "$CODEX_NOTIFY_SESSION_STRATEGY" in
+        snapshot|snapshot-or-latest)
+            printf '%s\n' "$CODEX_NOTIFY_SESSION_STRATEGY"
+            ;;
+        *)
+            printf '%s\n' "snapshot"
+            ;;
+    esac
+}
+
+session_discovery_timeout() {
+    case "$CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT" in
+        ''|*[!0-9]*)
+            printf '%s\n' "15"
+            ;;
+        *)
+            printf '%s\n' "$CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT"
+            ;;
+    esac
+}
+
+is_task_complete_event() {
+    local line="$1"
+
+    case "$line" in
+        *'"type":"task_complete"'*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+is_approval_required_event() {
+    local line="$1"
+
+    case "$line" in
+        *'"type":"exec_approval_request"'*|*'"type":"apply_patch_approval_request"'*)
+            return 0
+            ;;
+        *'"type":"function_call"'*'sandbox_permissions'*'require_escalated'*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+resolve_session_file() {
+    local marker_file="$1"
+    local run_marker="$2"
+    local strategy=""
+    local timeout_seconds=""
+    local deadline=""
+    local now=""
+    local session_snapshot=""
+    local session_id=""
+    local session_file=""
+
+    strategy="$(session_strategy)"
+    timeout_seconds="$(session_discovery_timeout)"
+    deadline=$(( $(date '+%s') + timeout_seconds ))
+
+    while :; do
+        if [ "$strategy" = "snapshot" ] || [ "$strategy" = "snapshot-or-latest" ]; then
+            if [ -z "$session_snapshot" ]; then
+                session_snapshot="$(pick_session_snapshot "$marker_file" "$run_marker" || true)"
+                if [ -n "$session_snapshot" ]; then
+                    session_id="$(session_id_from_snapshot "$session_snapshot")"
+                fi
+            fi
+
+            if [ -n "$session_id" ]; then
+                session_file="$(pick_session_file "$session_id" || true)"
+            fi
+        fi
+
+        if [ -z "$session_file" ] && [ "$strategy" = "snapshot-or-latest" ]; then
+            session_file="$(pick_latest_session_file "$marker_file" || true)"
+        fi
+
+        if [ -n "$session_file" ]; then
+            printf '%s\n' "$session_file"
+            return 0
+        fi
+
+        now="$(date '+%s')"
+        if [ "$now" -ge "$deadline" ]; then
+            return 1
+        fi
+        sleep 1
+    done
 }
 
 play_sound() {
     local sound_path="$1"
     if [ -x /usr/bin/afplay ] && [ -r "$sound_path" ]; then
         /usr/bin/afplay "$sound_path" >/dev/null 2>&1 &
+    fi
+}
+
+play_sound_after() {
+    local sound_path="$1"
+    local delay="$2"
+    if [ -x /usr/bin/afplay ] && [ -r "$sound_path" ]; then
+        (
+            sleep "$delay"
+            /usr/bin/afplay "$sound_path" >/dev/null 2>&1
+        ) &
     fi
 }
 
@@ -75,41 +233,47 @@ notify_approval_required() {
         printf 'approval_required\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" >> "$CODEX_NOTIFY_LOG_FILE"
     fi
 
-    play_sound "$CODEX_APPROVAL_SOUND"
-    show_popup "Codex" "Approval required"
+    play_sound_after "$CODEX_APPROVAL_SOUND" "$CODEX_APPROVAL_SOUND_DELAY"
 }
 
 monitor_codex_session() {
     local marker_file="$1"
+    local run_marker="$2"
     local session_file=""
     local line=""
+    local tail_pid=""
 
-    while :; do
-        session_file="$(pick_session_file "$marker_file")"
-        if [ -n "$session_file" ]; then
-            break
+    monitor_cleanup() {
+        if [ -n "$tail_pid" ]; then
+            kill "$tail_pid" >/dev/null 2>&1 || true
+            wait "$tail_pid" 2>/dev/null || true
         fi
-        sleep 1
-    done
+        exec 3<&- 2>/dev/null || true
+    }
 
-    tail -n0 -F "$session_file" 2>/dev/null | while IFS= read -r line; do
-        case "$line" in
-            *'"type":"task_complete"'*)
-                notify_task_complete
-                ;;
-        esac
+    session_file="$(resolve_session_file "$marker_file" "$run_marker")" || return 0
 
-        case "$line" in
-            *'"type":"function_call"'*'sandbox_permissions'*'require_escalated'*)
-                notify_approval_required
-                ;;
-        esac
+    exec 3< <(tail -n0 -F "$session_file" 2>/dev/null)
+    tail_pid=$!
+    trap 'exit 0' TERM INT HUP
+    trap monitor_cleanup EXIT
+
+    while IFS= read -r line <&3; do
+        if is_approval_required_event "$line"; then
+            notify_approval_required
+            continue
+        fi
+
+        if is_task_complete_event "$line"; then
+            notify_task_complete
+        fi
     done
 }
 
 cleanup() {
     if [ -n "${watcher_pid:-}" ]; then
         kill "$watcher_pid" >/dev/null 2>&1 || true
+        wait "$watcher_pid" 2>/dev/null || true
     fi
     if [ -n "${marker_file:-}" ] && [ -e "$marker_file" ]; then
         rm -f "$marker_file"
@@ -117,18 +281,21 @@ cleanup() {
 }
 
 main() {
+    local run_marker=""
+
     if ! is_interactive_codex "$@"; then
         exec "$CODEX_BIN" "$@"
     fi
 
     marker_file="$(mktemp)"
+    run_marker="$(new_run_marker)"
     watcher_pid=""
     trap cleanup EXIT
 
-    monitor_codex_session "$marker_file" &
+    monitor_codex_session "$marker_file" "$run_marker" &
     watcher_pid=$!
 
-    "$CODEX_BIN" "$@"
+    CODEX_NOTIFY_RUN_MARKER="$run_marker" "$CODEX_BIN" "$@"
 }
 
 main "$@"
