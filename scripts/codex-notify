@@ -6,7 +6,7 @@ CODEX_BIN_DEFAULT="$(command -v codex)"
 CODEX_BIN="${CODEX_NOTIFY_CODEX_BIN:-$CODEX_BIN_DEFAULT}"
 CODEX_SESSIONS_DIR="${CODEX_NOTIFY_SESSIONS_DIR:-$HOME/.codex/sessions}"
 CODEX_SHELL_SNAPSHOTS_DIR="${CODEX_NOTIFY_SHELL_SNAPSHOTS_DIR:-$HOME/.codex/shell_snapshots}"
-CODEX_NOTIFY_SESSION_STRATEGY="${CODEX_NOTIFY_SESSION_STRATEGY:-snapshot}"
+CODEX_NOTIFY_SESSION_STRATEGY="${CODEX_NOTIFY_SESSION_STRATEGY:-snapshot-or-latest}"
 CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT="${CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT:-15}"
 CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-}"
 CODEX_APPROVAL_SOUND="${CODEX_APPROVAL_SOUND:-}"
@@ -76,14 +76,19 @@ pick_latest_session_file() {
     local marker_file="$1"
     local newest=""
     local candidate=""
+    local candidate_count=0
 
     while IFS= read -r candidate; do
         [ -n "$candidate" ] || continue
+        candidate_count=$((candidate_count + 1))
         if [ -z "$newest" ] || [ "$candidate" -nt "$newest" ]; then
             newest="$candidate"
         fi
     done < <(find "$CODEX_SESSIONS_DIR" -type f -name '*.jsonl' -newer "$marker_file" 2>/dev/null)
 
+    # Fallback only when a single new rollout exists; otherwise we might bind
+    # to a different Codex session that started around the same time.
+    [ "$candidate_count" -eq 1 ] || return 1
     [ -n "$newest" ] || return 1
     printf '%s\n' "$newest"
 }
