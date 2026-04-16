@@ -12,11 +12,31 @@ font-thicken = true
 font-thicken-strength = 35
 alpha-blending = native
 window-vsync = true
+macos-option-as-alt = left
 
 # ===== colors =====
+# Match the old iTerm2/xterm-style ANSI palette so git colors look familiar.
+palette = 0=#000000
+palette = 1=#c91b00
+palette = 2=#00bb00
+palette = 3=#bbbb00
+palette = 4=#0000bb
+palette = 5=#bb00bb
+palette = 6=#00bbbb
+palette = 7=#d8d8d8
+palette = 8=#555555
+palette = 9=#ff5555
+palette = 10=#55ff55
+palette = 11=#ffff55
+palette = 12=#5555ff
+palette = 13=#ff55ff
+palette = 14=#55ffff
+palette = 15=#ffffff
 background = #000000
-foreground = #E8E8E8
+foreground = #D8D8D8
 background-opacity = 1
+selection-background = #B5D5FF
+selection-foreground = #000000
 window-theme = dark
 
 # ===== spacing =====
@@ -32,8 +52,9 @@ window-padding-color = background
 # ===== cursor =====
 cursor-style = bar
 cursor-style-blink = true
-cursor-color = #E8E8E8
+cursor-color = #D8D8D8
 adjust-cursor-thickness = 1
+mouse-hide-while-typing = true
 
 # ===== splits =====
 # 不要讓沒 focus 的 pane 變灰
@@ -43,14 +64,23 @@ unfocused-split-fill = #000000
 # 分隔線明顯一點
 split-divider-color = #5A5A5A
 
+# 新開 window/tab/split 跟著目前目錄走
+window-inherit-working-directory = true
+tab-inherit-working-directory = true
+split-inherit-working-directory = true
+
+# 重開 Ghostty 時恢復上次的視窗狀態
+window-save-state = always
+
 # ===== notifications =====
 shell-integration = detect
+shell-integration-features = cursor,sudo,title,path,ssh-env,ssh-terminfo
 notify-on-command-finish = unfocused
-notify-on-command-finish-action = no-bell,notify
+notify-on-command-finish-action = bell,notify
 notify-on-command-finish-after = 10s
 
 # ===== bell =====
-bell-features = no-system,no-audio,no-attention,no-title,no-border
+bell-features = system,no-audio,no-attention,no-title,no-border
 
 # ===== iTerm-like split behavior =====
 # 右分割後自動 equalize
