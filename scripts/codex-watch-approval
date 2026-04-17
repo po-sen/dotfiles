@@ -23,6 +23,8 @@ existing_size=""
 tail_start_byte=""
 line=""
 tail_pid=""
+marker_timestamp=""
+notified_lines_file=""
 
 cleanup() {
     if [ -n "$tail_pid" ]; then
@@ -30,6 +32,9 @@ cleanup() {
         wait "$tail_pid" 2>/dev/null || true
     fi
     exec 3<&- 2>/dev/null || true
+    if [ -n "$notified_lines_file" ] && [ -e "$notified_lines_file" ]; then
+        rm -f "$notified_lines_file"
+    fi
 }
 
 file_size_bytes() {
@@ -45,6 +50,42 @@ file_size_bytes() {
             printf '%s\n' "$size"
             ;;
     esac
+}
+
+timestamp_for_path() {
+    local path="$1"
+    local epoch=""
+
+    epoch="$(stat -f '%m' "$path" 2>/dev/null)" || epoch=""
+    case "$epoch" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    date -u -r "$epoch" '+%Y-%m-%dT%H:%M:%S.000Z'
+}
+
+line_timestamp() {
+    local line="$1"
+
+    printf '%s\n' "$line" | sed -n 's/.*"timestamp":"\([^"]*\)".*/\1/p'
+}
+
+line_is_recent_enough() {
+    local line="$1"
+    local line_ts=""
+
+    [ -n "$marker_timestamp" ] || return 0
+
+    line_ts="$(line_timestamp "$line")"
+    [ -n "$line_ts" ] || return 1
+
+    if [ "$line_ts" = "$marker_timestamp" ] || [[ "$line_ts" > "$marker_timestamp" ]]; then
+        return 0
+    fi
+
+    return 1
 }
 
 project_path_from_session_file() {
@@ -67,6 +108,40 @@ is_approval_required_event() {
             return 1
             ;;
     esac
+}
+
+has_notified_line() {
+    local line="$1"
+
+    [ -n "$notified_lines_file" ] || return 1
+    grep -Fqx -- "$line" "$notified_lines_file" 2>/dev/null
+}
+
+mark_line_notified() {
+    local line="$1"
+
+    [ -n "$notified_lines_file" ] || return 1
+    printf '%s\n' "$line" >> "$notified_lines_file"
+}
+
+process_event_line() {
+    local line="$1"
+
+    line_is_recent_enough "$line" || return 0
+    is_approval_required_event "$line" || return 0
+    has_notified_line "$line" && return 0
+
+    mark_line_notified "$line"
+    notify_approval_required "$project_path"
+}
+
+scan_existing_events() {
+    local session_file="$1"
+    local line=""
+
+    while IFS= read -r line; do
+        process_event_line "$line"
+    done < "$session_file"
 }
 
 pick_session_snapshot() {
@@ -164,11 +239,15 @@ resolve_session_file() {
 }
 
 session_file="$(resolve_session_file)" || exit 0
+marker_timestamp="$(timestamp_for_path "$marker_file" || true)"
+notified_lines_file="$(mktemp)"
 existing_size="$(file_size_bytes "$session_file")"
 session_project_path="$(project_path_from_session_file "$session_file" || true)"
 if [ -n "$session_project_path" ]; then
     project_path="$session_project_path"
 fi
+
+scan_existing_events "$session_file"
 
 tail_start_byte=$((existing_size + 1))
 exec 3< <(tail -c +"$tail_start_byte" -F "$session_file" 2>/dev/null)
@@ -177,7 +256,5 @@ trap 'exit 0' TERM INT HUP
 trap cleanup EXIT
 
 while IFS= read -r line <&3; do
-    if is_approval_required_event "$line"; then
-        notify_approval_required "$project_path"
-    fi
+    process_event_line "$line"
 done

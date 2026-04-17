@@ -6,6 +6,8 @@ _codex_notify_repo_root="$(
 export CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-/System/Library/Sounds/Funk.aiff}"
 export CODEX_APPROVAL_SOUND="${CODEX_APPROVAL_SOUND:-/System/Library/Sounds/Hero.aiff}"
 export CODEX_NOTIFY_POPUP="${CODEX_NOTIFY_POPUP:-1}"
+export CODEX_NOTIFY_TERMINAL_NOTIFIER="${CODEX_NOTIFY_TERMINAL_NOTIFIER:-/opt/homebrew/bin/terminal-notifier}"
+export CODEX_NOTIFY_APPROVAL_WATCHER="${CODEX_NOTIFY_APPROVAL_WATCHER:-1}"
 export CODEX_NOTIFY_COMMAND="${CODEX_NOTIFY_COMMAND:-$_codex_notify_repo_root/scripts/codex-notify}"
 
 unset _codex_notify_config_path

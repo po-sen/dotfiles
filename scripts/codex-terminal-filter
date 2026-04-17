@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+
+import os
+import pty
+import select
+import signal
+import struct
+import sys
+import termios
+import tty
+from typing import Optional
+
+
+class NotificationStripper:
+    ESC = 0x1B
+    BEL = 0x07
+
+    def __init__(self) -> None:
+        self.state = "normal"
+
+    def feed(self, data: bytes) -> bytes:
+        out = bytearray()
+        i = 0
+
+        while i < len(data):
+            byte = data[i]
+
+            if self.state == "normal":
+                if byte == self.BEL:
+                    i += 1
+                    continue
+                if byte == self.ESC:
+                    self.state = "esc"
+                    i += 1
+                    continue
+                out.append(byte)
+                i += 1
+                continue
+
+            if self.state == "esc":
+                if byte == ord("]"):
+                    self.state = "osc"
+                    i += 1
+                    continue
+                out.append(self.ESC)
+                self.state = "normal"
+                continue
+
+            if self.state == "osc":
+                if byte == ord("9"):
+                    self.state = "osc9"
+                    i += 1
+                    continue
+                out.extend((self.ESC, ord("]")))
+                self.state = "normal"
+                continue
+
+            if self.state == "osc9":
+                if byte == ord(";"):
+                    self.state = "in_osc9"
+                    i += 1
+                    continue
+                out.extend((self.ESC, ord("]"), ord("9")))
+                self.state = "normal"
+                continue
+
+            if self.state == "in_osc9":
+                if byte == self.BEL:
+                    self.state = "normal"
+                    i += 1
+                    continue
+                if byte == self.ESC:
+                    self.state = "in_osc9_esc"
+                    i += 1
+                    continue
+                i += 1
+                continue
+
+            if self.state == "in_osc9_esc":
+                if byte == ord("\\"):
+                    self.state = "normal"
+                    i += 1
+                    continue
+                if byte == self.BEL:
+                    self.state = "normal"
+                    i += 1
+                    continue
+                self.state = "in_osc9"
+                continue
+
+        return bytes(out)
+
+    def flush(self) -> bytes:
+        if self.state == "esc":
+            self.state = "normal"
+            return bytes((self.ESC,))
+        if self.state == "osc":
+            self.state = "normal"
+            return bytes((self.ESC, ord("]")))
+        if self.state == "osc9":
+            self.state = "normal"
+            return bytes((self.ESC, ord("]"), ord("9")))
+        self.state = "normal"
+        return b""
+
+
+def get_winsize(fd: int) -> Optional[bytes]:
+    try:
+        return fcntl.ioctl(fd, termios.TIOCGWINSZ, struct.pack("HHHH", 0, 0, 0, 0))
+    except OSError:
+        return None
+
+
+def set_winsize(fd: int, winsize: Optional[bytes]) -> None:
+    if winsize is None:
+        return
+    try:
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
+    except OSError:
+        pass
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print("usage: codex-terminal-filter <command> [args...]", file=sys.stderr)
+        return 2
+
+    argv = sys.argv[1:]
+    pid, master_fd = pty.fork()
+    if pid == 0:
+        os.execvp(argv[0], argv)
+
+    stdin_fd = sys.stdin.fileno()
+    stdout = sys.stdout.buffer
+    stripper = NotificationStripper()
+    original_termios = None
+
+    if os.isatty(stdin_fd):
+        original_termios = termios.tcgetattr(stdin_fd)
+        tty.setraw(stdin_fd)
+
+    def sync_winsize(*_args: object) -> None:
+        set_winsize(master_fd, get_winsize(stdin_fd))
+
+    signal.signal(signal.SIGWINCH, sync_winsize)
+    sync_winsize()
+
+    stdin_open = True
+
+    try:
+        while True:
+            read_fds = [master_fd]
+            if stdin_open:
+                read_fds.append(stdin_fd)
+
+            ready, _, _ = select.select(read_fds, [], [])
+
+            if master_fd in ready:
+                try:
+                    data = os.read(master_fd, 65536)
+                except OSError:
+                    data = b""
+                if not data:
+                    break
+                filtered = stripper.feed(data)
+                if filtered:
+                    stdout.write(filtered)
+                    stdout.flush()
+
+            if stdin_open and stdin_fd in ready:
+                try:
+                    data = os.read(stdin_fd, 65536)
+                except OSError:
+                    data = b""
+                if data:
+                    try:
+                        os.write(master_fd, data)
+                    except OSError:
+                        break
+                else:
+                    stdin_open = False
+    finally:
+        trailing = stripper.flush()
+        if trailing:
+            stdout.write(trailing)
+            stdout.flush()
+        if original_termios is not None:
+            termios.tcsetattr(stdin_fd, termios.TCSADRAIN, original_termios)
+
+    _, status = os.waitpid(pid, 0)
+    return os.waitstatus_to_exitcode(status)
+
+
+if __name__ == "__main__":
+    import fcntl
+
+    raise SystemExit(main())

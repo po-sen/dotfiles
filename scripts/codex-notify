@@ -3,6 +3,7 @@
 set -euo pipefail
 
 CODEX_BIN="${CODEX_NOTIFY_CODEX_BIN:-$(command -v codex)}"
+CODEX_NOTIFY_APPROVAL_WATCHER="${CODEX_NOTIFY_APPROVAL_WATCHER:-1}"
 
 cleanup() {
     if [ -n "${watcher_pid:-}" ]; then
@@ -72,6 +73,8 @@ main() {
     local script_dir=""
     local native_handler=""
     local approval_watcher=""
+    local terminal_filter=""
+    local -a codex_args=()
 
     if ! is_interactive_codex "$@"; then
         exec "$CODEX_BIN" "$@"
@@ -82,17 +85,25 @@ main() {
     )"
     native_handler="$script_dir/codex-notify-native"
     approval_watcher="$script_dir/codex-watch-approval"
+    terminal_filter="$script_dir/codex-terminal-filter"
     requested_cwd="$(parse_requested_cwd "$@")"
     marker_file="$(mktemp)"
     run_marker="$(new_run_marker)"
     watcher_pid=""
     trap cleanup EXIT
 
-    "$approval_watcher" "$marker_file" "$run_marker" "$requested_cwd" &
-    watcher_pid=$!
+    if [ "$CODEX_NOTIFY_APPROVAL_WATCHER" = "1" ]; then
+        "$approval_watcher" "$marker_file" "$run_marker" "$requested_cwd" &
+        watcher_pid=$!
+    fi
 
     printf -v notify_config 'notify=["%s"]' "$native_handler"
-    CODEX_NOTIFY_RUN_MARKER="$run_marker" "$CODEX_BIN" -c "$notify_config" "$@"
+    codex_args=(-c "$notify_config" -c 'tui.notifications=false' "$@")
+    if [ -x "$terminal_filter" ]; then
+        CODEX_NOTIFY_RUN_MARKER="$run_marker" "$terminal_filter" "$CODEX_BIN" "${codex_args[@]}"
+        return
+    fi
+    CODEX_NOTIFY_RUN_MARKER="$run_marker" "$CODEX_BIN" "${codex_args[@]}"
 }
 
 main "$@"
