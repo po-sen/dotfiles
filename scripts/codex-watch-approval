@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(
+    cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P
+)"
+
+# shellcheck source=/Users/posen/dotfiles/scripts/codex-notify-common
+. "$script_dir/codex-notify-common"
+
+CODEX_SESSIONS_DIR="${CODEX_NOTIFY_SESSIONS_DIR:-$HOME/.codex/sessions}"
+CODEX_SHELL_SNAPSHOTS_DIR="${CODEX_NOTIFY_SHELL_SNAPSHOTS_DIR:-$HOME/.codex/shell_snapshots}"
+CODEX_NOTIFY_SESSION_STRATEGY="${CODEX_NOTIFY_SESSION_STRATEGY:-snapshot-or-latest}"
+CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT="${CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT:-15}"
+
+marker_file="${1:?missing marker file}"
+run_marker="${2:?missing run marker}"
+project_path="${3:-${PWD:-}}"
+session_file=""
+session_project_path=""
+existing_size=""
+tail_start_byte=""
+line=""
+tail_pid=""
+
+cleanup() {
+    if [ -n "$tail_pid" ]; then
+        kill "$tail_pid" >/dev/null 2>&1 || true
+        wait "$tail_pid" 2>/dev/null || true
+    fi
+    exec 3<&- 2>/dev/null || true
+}
+
+file_size_bytes() {
+    local path="$1"
+    local size=""
+
+    size="$(wc -c < "$path" 2>/dev/null | tr -d '[:space:]')" || size=""
+    case "$size" in
+        ''|*[!0-9]*)
+            printf '%s\n' "0"
+            ;;
+        *)
+            printf '%s\n' "$size"
+            ;;
+    esac
+}
+
+project_path_from_session_file() {
+    local session_file="$1"
+
+    sed -n 's/.*"cwd":"\([^"]*\)".*/\1/p' "$session_file" | head -n 1
+}
+
+is_approval_required_event() {
+    local line="$1"
+
+    case "$line" in
+        *'"type":"exec_approval_request"'*|*'"type":"apply_patch_approval_request"'*|*'"type":"request_permissions"'*)
+            return 0
+            ;;
+        *'"type":"function_call"'*'sandbox_permissions'*'require_escalated'*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+pick_session_snapshot() {
+    local candidate=""
+
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        if grep -Fq "declare -x CODEX_NOTIFY_RUN_MARKER=\"$run_marker\"" "$candidate" 2>/dev/null; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done < <(find "$CODEX_SHELL_SNAPSHOTS_DIR" -type f -name '*.sh' -newer "$marker_file" 2>/dev/null)
+
+    return 1
+}
+
+pick_session_file_by_id() {
+    local session_id="$1"
+    local candidate=""
+
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        printf '%s\n' "$candidate"
+        return 0
+    done < <(find "$CODEX_SESSIONS_DIR" -type f -name "*$session_id.jsonl" 2>/dev/null)
+
+    return 1
+}
+
+pick_latest_session_file() {
+    local newest=""
+    local candidate=""
+    local candidate_count=0
+
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        candidate_count=$((candidate_count + 1))
+        if [ -z "$newest" ] || [ "$candidate" -nt "$newest" ]; then
+            newest="$candidate"
+        fi
+    done < <(find "$CODEX_SESSIONS_DIR" -type f -name '*.jsonl' -newer "$marker_file" 2>/dev/null)
+
+    [ "$candidate_count" -eq 1 ] || return 1
+    [ -n "$newest" ] || return 1
+    printf '%s\n' "$newest"
+}
+
+resolve_session_file() {
+    local deadline=""
+    local now=""
+    local session_file=""
+    local session_id=""
+    local session_snapshot=""
+    local timeout_seconds=""
+
+    case "$CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT" in
+        ''|*[!0-9]*)
+            timeout_seconds=15
+            ;;
+        *)
+            timeout_seconds="$CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT"
+            ;;
+    esac
+
+    deadline=$(( $(date '+%s') + timeout_seconds ))
+
+    while :; do
+        if [ -z "$session_snapshot" ]; then
+            session_snapshot="$(pick_session_snapshot || true)"
+            if [ -n "$session_snapshot" ]; then
+                session_id="$(basename "$session_snapshot")"
+                session_id="${session_id%%.*}"
+            fi
+        fi
+
+        if [ -n "$session_id" ]; then
+            session_file="$(pick_session_file_by_id "$session_id" || true)"
+        fi
+
+        if [ -z "$session_file" ] && [ "$CODEX_NOTIFY_SESSION_STRATEGY" = "snapshot-or-latest" ]; then
+            session_file="$(pick_latest_session_file || true)"
+        fi
+
+        if [ -n "$session_file" ]; then
+            printf '%s\n' "$session_file"
+            return 0
+        fi
+
+        now="$(date '+%s')"
+        if [ "$now" -ge "$deadline" ]; then
+            return 1
+        fi
+        sleep 1
+    done
+}
+
+session_file="$(resolve_session_file)" || exit 0
+existing_size="$(file_size_bytes "$session_file")"
+session_project_path="$(project_path_from_session_file "$session_file" || true)"
+if [ -n "$session_project_path" ]; then
+    project_path="$session_project_path"
+fi
+
+tail_start_byte=$((existing_size + 1))
+exec 3< <(tail -c +"$tail_start_byte" -F "$session_file" 2>/dev/null)
+tail_pid=$!
+trap 'exit 0' TERM INT HUP
+trap cleanup EXIT
+
+while IFS= read -r line <&3; do
+    if is_approval_required_event "$line"; then
+        notify_approval_required "$project_path"
+    fi
+done

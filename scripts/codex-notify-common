@@ -1,0 +1,96 @@
+CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-/System/Library/Sounds/Funk.aiff}"
+CODEX_APPROVAL_SOUND="${CODEX_APPROVAL_SOUND:-/System/Library/Sounds/Hero.aiff}"
+CODEX_NOTIFY_POPUP="${CODEX_NOTIFY_POPUP:-1}"
+CODEX_NOTIFY_LOG_FILE="${CODEX_NOTIFY_LOG_FILE:-}"
+CODEX_NOTIFY_TITLE="${CODEX_NOTIFY_TITLE:-Codex}"
+
+escape_osascript_string() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+extract_json_field() {
+    local key="$1"
+    local payload="$2"
+
+    printf '%s\n' "$payload" | sed -n "s/.*\"$key\":\"\\([^\"]*\\)\".*/\\1/p"
+}
+
+project_name_from_path() {
+    local project_path="$1"
+
+    if [ -z "$project_path" ] || [ "$project_path" = "/" ] || [ "$project_path" = "." ]; then
+        return 0
+    fi
+
+    basename "$project_path"
+}
+
+project_path_from_payload() {
+    local payload="$1"
+    local project_path=""
+
+    project_path="$(extract_json_field "cwd" "$payload")"
+    if [ -z "$project_path" ]; then
+        project_path="$(extract_json_field "working_directory" "$payload")"
+    fi
+
+    printf '%s\n' "$project_path"
+}
+
+log_notification() {
+    local kind="$1"
+    local message="$2"
+
+    if [ -n "$CODEX_NOTIFY_LOG_FILE" ]; then
+        printf '%s\t%s\t%s\n' "$kind" "$(date '+%Y-%m-%d %H:%M:%S')" "$message" >> "$CODEX_NOTIFY_LOG_FILE"
+    fi
+}
+
+play_sound() {
+    local sound_path="$1"
+
+    if [ -x /usr/bin/afplay ] && [ -r "$sound_path" ]; then
+        /usr/bin/afplay "$sound_path" >/dev/null 2>&1 &
+    fi
+}
+
+show_popup() {
+    local title="$1"
+    local message="$2"
+    local escaped_title=""
+    local escaped_message=""
+
+    if [ "$CODEX_NOTIFY_POPUP" != "1" ] || [ ! -x /usr/bin/osascript ]; then
+        return 0
+    fi
+
+    escaped_title="$(escape_osascript_string "$title")"
+    escaped_message="$(escape_osascript_string "$message")"
+    /usr/bin/osascript -e "display notification \"$escaped_message\" with title \"$escaped_title\"" >/dev/null 2>&1 &
+}
+
+notify_with_project() {
+    local kind="$1"
+    local sound_path="$2"
+    local prefix="$3"
+    local project_path="${4:-}"
+    local project_name=""
+    local message="$prefix"
+
+    project_name="$(project_name_from_path "$project_path")"
+    if [ -n "$project_name" ]; then
+        message="$message: $project_name"
+    fi
+
+    log_notification "$kind" "$message"
+    play_sound "$sound_path"
+    show_popup "$CODEX_NOTIFY_TITLE" "$message"
+}
+
+notify_task_complete() {
+    notify_with_project "task_complete" "$CODEX_NOTIFY_SOUND" "Turn complete" "${1:-}"
+}
+
+notify_approval_required() {
+    notify_with_project "approval_required" "$CODEX_APPROVAL_SOUND" "Approval required" "${1:-}"
+}
