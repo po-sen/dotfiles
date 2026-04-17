@@ -16,6 +16,7 @@ CODEX_NOTIFY_TITLE="${CODEX_NOTIFY_TITLE:-Codex}"
 CODEX_NOTIFY_TERMINAL_NOTIFIER="${CODEX_NOTIFY_TERMINAL_NOTIFIER:-}"
 CODEX_NOTIFY_CLICK_HANDLER="${CODEX_NOTIFY_CLICK_HANDLER:-$script_dir/codex-focus-ghostty}"
 CODEX_NOTIFY_GHOSTTY_BUNDLE_ID="${CODEX_NOTIFY_GHOSTTY_BUNDLE_ID:-com.mitchellh.ghostty}"
+CODEX_NOTIFY_MESSAGE_MAX_CHARS="${CODEX_NOTIFY_MESSAGE_MAX_CHARS:-120}"
 
 resolve_terminal_notifier() {
     local candidate=""
@@ -45,6 +46,87 @@ extract_json_field() {
     printf '%s\n' "$payload" | sed -n "s/.*\"$key\":\"\\([^\"]*\\)\".*/\\1/p"
 }
 
+json_get_string() {
+    local payload="$1"
+    local key="$2"
+
+    python3 - "$payload" "$key" <<'PY'
+import json
+import sys
+
+payload = sys.argv[1]
+key = sys.argv[2]
+
+try:
+    value = json.loads(payload).get(key, "")
+except Exception:
+    value = ""
+
+if isinstance(value, str):
+    sys.stdout.write(value)
+PY
+}
+
+approval_detail_from_event() {
+    local payload="$1"
+
+    python3 - "$payload" <<'PY'
+import json
+import sys
+
+payload = sys.argv[1]
+
+def pick_value(obj):
+    if not isinstance(obj, dict):
+        return ""
+    for key in ("justification", "reason"):
+        value = obj.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    value = obj.get("cmd")
+    if isinstance(value, str) and value.strip():
+        return value
+    command = obj.get("command")
+    if isinstance(command, list) and command:
+        return " ".join(str(part) for part in command)
+    if isinstance(command, str) and command.strip():
+        return command
+    return ""
+
+detail = ""
+
+try:
+    outer = json.loads(payload)
+except Exception:
+    outer = None
+
+if isinstance(outer, dict):
+    detail = pick_value(outer.get("payload"))
+    if not detail:
+        arguments = outer.get("payload", {}).get("arguments")
+        if isinstance(arguments, str):
+            try:
+                detail = pick_value(json.loads(arguments))
+            except Exception:
+                detail = ""
+
+sys.stdout.write(detail)
+PY
+}
+
+approval_detail_from_arg() {
+    local detail="${1:-}"
+
+    case "$detail" in
+        \{*)
+            approval_detail_from_event "$detail"
+            ;;
+        *)
+            printf '%s' "$detail"
+            ;;
+    esac
+}
+
 project_name_from_path() {
     local project_path="$1"
 
@@ -70,9 +152,12 @@ project_path_from_payload() {
 log_notification() {
     local kind="$1"
     local message="$2"
+    local log_message=""
+
+    log_message="$(printf '%s' "$message" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
 
     if [ -n "$CODEX_NOTIFY_LOG_FILE" ]; then
-        printf '%s\t%s\t%s\n' "$kind" "$(date '+%Y-%m-%d %H:%M:%S')" "$message" >> "$CODEX_NOTIFY_LOG_FILE"
+        printf '%s\t%s\t%s\n' "$kind" "$(date '+%Y-%m-%d %H:%M:%S')" "$log_message" >> "$CODEX_NOTIFY_LOG_FILE"
     fi
 }
 
@@ -108,8 +193,10 @@ build_click_command() {
 
 show_popup_with_osascript() {
     local title="$1"
-    local message="$2"
+    local subtitle="$2"
+    local message="$3"
     local escaped_title=""
+    local escaped_subtitle=""
     local escaped_message=""
 
     if [ ! -x /usr/bin/osascript ]; then
@@ -117,14 +204,16 @@ show_popup_with_osascript() {
     fi
 
     escaped_title="$(escape_osascript_string "$title")"
+    escaped_subtitle="$(escape_osascript_string "$subtitle")"
     escaped_message="$(escape_osascript_string "$message")"
-    /usr/bin/osascript -e "display notification \"$escaped_message\" with title \"$escaped_title\"" >/dev/null 2>&1 &
+    /usr/bin/osascript -e "display notification \"$escaped_message\" with title \"$escaped_title\" subtitle \"$escaped_subtitle\"" >/dev/null 2>&1 &
 }
 
 show_popup() {
     local title="$1"
-    local message="$2"
-    local project_path="${3:-}"
+    local subtitle="$2"
+    local message="$3"
+    local project_path="${4:-}"
     local click_command=""
     local terminal_notifier=""
     local -a notifier_args=()
@@ -138,6 +227,7 @@ show_popup() {
     if [ -n "$terminal_notifier" ]; then
         notifier_args=(
             -title "$title"
+            -subtitle "$subtitle"
             -message "$message"
             -activate "$CODEX_NOTIFY_GHOSTTY_BUNDLE_ID"
         )
@@ -148,38 +238,88 @@ show_popup() {
         return 0
     fi
 
-    show_popup_with_osascript "$title" "$message"
+    show_popup_with_osascript "$title" "$subtitle" "$message"
+}
+
+normalize_notification_text() {
+    local text="$1"
+
+    printf '%s' "$text" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//'
+}
+
+truncate_notification_text() {
+    local text="$1"
+    local max_chars="${2:-$CODEX_NOTIFY_MESSAGE_MAX_CHARS}"
+
+    python3 - "$text" "$max_chars" <<'PY'
+import sys
+
+text = sys.argv[1].strip()
+try:
+    max_chars = int(sys.argv[2])
+except Exception:
+    max_chars = 120
+
+if max_chars < 4 or len(text) <= max_chars:
+    sys.stdout.write(text)
+else:
+    sys.stdout.write(text[: max_chars - 3].rstrip() + "...")
+PY
+}
+
+status_line_for_project() {
+    local project_path="$1"
+    local status_suffix="$2"
+    local project_name=""
+
+    project_name="$(project_name_from_path "$project_path")"
+    if [ -n "$project_name" ]; then
+        printf '%s %s\n' "$project_name" "$status_suffix"
+        return 0
+    fi
+
+    printf '%s\n' "$status_suffix"
 }
 
 notify_with_project() {
     local kind="$1"
     local sound_path="$2"
-    local prefix="$3"
-    local project_path="${4:-}"
-    local project_name=""
-    local message="$prefix"
+    local status_suffix="$3"
+    local fallback_detail="$4"
+    local project_path="${5:-}"
+    local detail="${6:-}"
+    local subtitle=""
+    local message=""
+    local log_message=""
 
-    project_name="$(project_name_from_path "$project_path")"
-    if [ -n "$project_name" ]; then
-        message="$message: $project_name"
+    subtitle="$(status_line_for_project "$project_path" "$status_suffix")"
+    detail="$(normalize_notification_text "$detail")"
+    if [ -z "$detail" ]; then
+        detail="$fallback_detail"
+    fi
+    message="$(truncate_notification_text "$detail")"
+    log_message="$subtitle"
+    if [ -n "$message" ]; then
+        log_message="$log_message | $message"
     fi
 
-    log_notification "$kind" "$message"
+    log_notification "$kind" "$log_message"
     play_sound "$sound_path"
-    show_popup "$CODEX_NOTIFY_TITLE" "$message" "$project_path"
+    show_popup "$CODEX_NOTIFY_TITLE" "$subtitle" "$message" "$project_path"
 }
 
 notify_task_complete() {
-    notify_with_project "task_complete" "$CODEX_NOTIFY_SOUND" "Turn complete" "${1:-}"
+    notify_with_project "task_complete" "$CODEX_NOTIFY_SOUND" "finished" "Open Codex for details." "${1:-}" "${2:-}"
 }
 
 notify_approval_required() {
-    notify_with_project "approval_required" "$CODEX_APPROVAL_SOUND" "Approval required" "${1:-}"
+    notify_with_project "approval_required" "$CODEX_APPROVAL_SOUND" "needs approval" "Open Codex to review." "${1:-}" "${2:-}"
 }
 
 handle_native_payload() {
     local payload="${1:-}"
     local project_path=""
+    local detail=""
 
     project_path="$(project_path_from_payload "$payload")"
     if [ -z "$project_path" ]; then
@@ -188,7 +328,8 @@ handle_native_payload() {
 
     case "$payload" in
         *'"type":"agent-turn-complete"'*)
-            notify_task_complete "$project_path"
+            detail="$(json_get_string "$payload" "last-assistant-message")"
+            notify_task_complete "$project_path" "$detail"
             ;;
     esac
 }
@@ -202,7 +343,7 @@ handle_script_mode() {
             ;;
         --approval-notify)
             shift
-            notify_approval_required "${1:-${PWD:-}}"
+            notify_approval_required "${1:-${PWD:-}}" "$(approval_detail_from_arg "${2:-}")"
             return 0
             ;;
         *)

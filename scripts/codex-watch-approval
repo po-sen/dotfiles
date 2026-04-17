@@ -130,7 +130,7 @@ process_event_line() {
     has_notified_line "$line" && return 0
 
     mark_line_notified "$line"
-    "$notify_command" --approval-notify "$project_path"
+    "$notify_command" --approval-notify "$project_path" "$line"
 }
 
 scan_existing_events() {
