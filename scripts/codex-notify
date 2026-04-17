@@ -17,7 +17,6 @@ CODEX_NOTIFY_TERMINAL_NOTIFIER="${CODEX_NOTIFY_TERMINAL_NOTIFIER:-}"
 CODEX_NOTIFY_CLICK_HANDLER="${CODEX_NOTIFY_CLICK_HANDLER:-$script_dir/codex-focus-ghostty}"
 CODEX_NOTIFY_GHOSTTY_BUNDLE_ID="${CODEX_NOTIFY_GHOSTTY_BUNDLE_ID:-com.mitchellh.ghostty}"
 CODEX_NOTIFY_MESSAGE_MAX_CHARS="${CODEX_NOTIFY_MESSAGE_MAX_CHARS:-90}"
-CODEX_NOTIFY_COMPLETION_SUMMARY_MAX_CHARS="${CODEX_NOTIFY_COMPLETION_SUMMARY_MAX_CHARS:-72}"
 
 resolve_terminal_notifier() {
     local candidate=""
@@ -265,6 +264,18 @@ sys.stdout.write(text)
 PY
 }
 
+first_line_notification_text() {
+    local text="$1"
+
+    python3 - "$text" <<'PY'
+import sys
+
+text = sys.argv[1]
+text = text.replace("\r\n", "\n").replace("\r", "\n")
+sys.stdout.write(text.split("\n", 1)[0])
+PY
+}
+
 truncate_notification_text() {
     local text="$1"
     local max_chars="${2:-$CODEX_NOTIFY_MESSAGE_MAX_CHARS}"
@@ -286,58 +297,6 @@ else:
     if space >= max(12, (max_chars - 3) // 2):
         cut = cut[:space]
     sys.stdout.write(cut.rstrip() + "...")
-PY
-}
-
-summarize_completion_text() {
-    local text="$1"
-    local max_chars="${2:-$CODEX_NOTIFY_COMPLETION_SUMMARY_MAX_CHARS}"
-
-    python3 - "$text" "$max_chars" <<'PY'
-import re
-import sys
-
-text = sys.argv[1].strip()
-try:
-    max_chars = int(sys.argv[2])
-except Exception:
-    max_chars = 72
-
-if not text:
-    sys.stdout.write("")
-    raise SystemExit(0)
-
-sentence_parts = re.split(r"(?<=[.!?。！？])\s+", text, maxsplit=1)
-candidate = sentence_parts[0].strip()
-candidate = re.sub(r"[.!?。！？]+$", "", candidate).strip()
-
-if len(candidate) > max_chars:
-    split_patterns = [
-        r"\s+and\s+",
-        r"\s+with\s+",
-        r"\s+after\s+",
-        r"\s+while\s+",
-        r"\s+then\s+",
-        r"\s+plus\s+",
-        r"\s*;\s*",
-        r"\s*,\s*",
-    ]
-    for pattern in split_patterns:
-        parts = re.split(pattern, candidate, maxsplit=1)
-        first = parts[0].strip()
-        if len(parts) > 1 and len(first) >= 12:
-            candidate = first
-            break
-
-if len(candidate) > max_chars:
-    cut = candidate[:max_chars]
-    space = cut.rfind(" ")
-    if space >= max(12, max_chars // 2):
-        candidate = cut[:space].strip()
-    else:
-        candidate = cut.strip()
-
-sys.stdout.write(candidate)
 PY
 }
 
@@ -367,15 +326,20 @@ notify_with_project() {
     local log_message=""
 
     subtitle="$(status_line_for_project "$project_path" "$status_suffix")"
-    detail="$(normalize_notification_text "$detail")"
-    if [ -z "$detail" ]; then
-        detail="$fallback_detail"
-    fi
     case "$kind" in
         task_complete)
-            message="$(summarize_completion_text "$detail")"
+            detail="$(first_line_notification_text "$detail")"
+            detail="$(normalize_notification_text "$detail")"
+            if [ -z "$detail" ]; then
+                detail="$fallback_detail"
+            fi
+            message="$(truncate_notification_text "$detail")"
             ;;
         *)
+            detail="$(normalize_notification_text "$detail")"
+            if [ -z "$detail" ]; then
+                detail="$fallback_detail"
+            fi
             message="$(truncate_notification_text "$detail")"
             ;;
     esac
