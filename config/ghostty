@@ -14,7 +14,7 @@ alpha-blending = native
 window-vsync = true
 macos-option-as-alt = left
 
-# Run login bash so ~/.bash_profile loads Codex wrapper config.
+# Run login bash so shell profile exports are available to Codex.
 command = /opt/homebrew/bin/bash -l
 
 # ===== colors =====

@@ -2,24 +2,42 @@ _codex_notify_config_path="$(readlink "$HOME/.codexrc" 2>/dev/null || printf '%s
 _codex_notify_repo_root="$(
     cd "$(dirname "$_codex_notify_config_path")/.." >/dev/null 2>&1 && pwd -P
 )"
-CODEX_NOTIFY_WRAPPER="$_codex_notify_repo_root/scripts/codex-notify"
-CODEX_NOTIFY_SOUND_DEFAULT="${CODEX_NOTIFY_SOUND_DEFAULT:-/System/Library/Sounds/Funk.aiff}"
-CODEX_APPROVAL_SOUND_DEFAULT="${CODEX_APPROVAL_SOUND_DEFAULT:-/System/Library/Sounds/Sosumi.aiff}"
-CODEX_APPROVAL_SOUND_DELAY_DEFAULT="${CODEX_APPROVAL_SOUND_DELAY_DEFAULT:-0.6}"
-CODEX_NOTIFY_POPUP_DEFAULT="${CODEX_NOTIFY_POPUP_DEFAULT:-1}"
+
+export CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-/System/Library/Sounds/Funk.aiff}"
+export CODEX_NOTIFY_POPUP="${CODEX_NOTIFY_POPUP:-1}"
+export CODEX_NOTIFY_COMMAND="${CODEX_NOTIFY_COMMAND:-$_codex_notify_repo_root/scripts/codex-notify}"
+
 unset _codex_notify_config_path
 unset _codex_notify_repo_root
 
-if [[ -x "$CODEX_NOTIFY_WRAPPER" ]]; then
-    codex_raw() {
-        command codex "$@"
-    }
+_codex_is_interactive() {
+    if [ "$#" -eq 0 ]; then
+        return 0
+    fi
 
+    case "$1" in
+        -*|resume|fork)
+            return 0
+            ;;
+        exec|review|login|logout|mcp|marketplace|mcp-server|app-server|app|completion|sandbox|debug|apply|cloud|exec-server|features|help)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+if [ -x "$CODEX_NOTIFY_COMMAND" ]; then
     codex() {
-        CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-$CODEX_NOTIFY_SOUND_DEFAULT}" \
-        CODEX_APPROVAL_SOUND="${CODEX_APPROVAL_SOUND:-$CODEX_APPROVAL_SOUND_DEFAULT}" \
-        CODEX_APPROVAL_SOUND_DELAY="${CODEX_APPROVAL_SOUND_DELAY:-$CODEX_APPROVAL_SOUND_DELAY_DEFAULT}" \
-        CODEX_NOTIFY_POPUP="${CODEX_NOTIFY_POPUP:-$CODEX_NOTIFY_POPUP_DEFAULT}" \
-        "$CODEX_NOTIFY_WRAPPER" "$@"
+        local notify_config
+
+        if _codex_is_interactive "$@"; then
+            printf -v notify_config 'notify=["%s"]' "$CODEX_NOTIFY_COMMAND"
+            command codex -c "$notify_config" "$@"
+            return
+        fi
+
+        command codex "$@"
     }
 fi
