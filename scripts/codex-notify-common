@@ -1,8 +1,16 @@
+common_script_dir="$(
+    cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P
+)"
+
 CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-/System/Library/Sounds/Funk.aiff}"
 CODEX_APPROVAL_SOUND="${CODEX_APPROVAL_SOUND:-/System/Library/Sounds/Hero.aiff}"
 CODEX_NOTIFY_POPUP="${CODEX_NOTIFY_POPUP:-1}"
 CODEX_NOTIFY_LOG_FILE="${CODEX_NOTIFY_LOG_FILE:-}"
 CODEX_NOTIFY_TITLE="${CODEX_NOTIFY_TITLE:-Codex}"
+CODEX_NOTIFY_TERMINAL_NOTIFIER="${CODEX_NOTIFY_TERMINAL_NOTIFIER:-$(command -v terminal-notifier 2>/dev/null || true)}"
+CODEX_NOTIFY_CLICK_HANDLER="${CODEX_NOTIFY_CLICK_HANDLER:-$common_script_dir/codex-focus-ghostty}"
+CODEX_NOTIFY_GHOSTTY_BUNDLE_ID="${CODEX_NOTIFY_GHOSTTY_BUNDLE_ID:-com.mitchellh.ghostty}"
+CODEX_NOTIFY_CLICK_LOG_FILE="${CODEX_NOTIFY_CLICK_LOG_FILE:-$HOME/.codex/codex-notify-click.log}"
 
 escape_osascript_string() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -57,10 +65,60 @@ play_sound() {
 show_popup() {
     local title="$1"
     local message="$2"
+    local project_path="${3:-}"
+    local click_command=""
+    local -a notifier_args=()
+
+    if [ "$CODEX_NOTIFY_POPUP" != "1" ]; then
+        return 0
+    fi
+
+    click_command="$(build_click_command "$project_path" || true)"
+    if [ -x "$CODEX_NOTIFY_TERMINAL_NOTIFIER" ]; then
+        notifier_args=(
+            -title "$title"
+            -message "$message"
+            -activate "$CODEX_NOTIFY_GHOSTTY_BUNDLE_ID"
+        )
+        if [ -n "$click_command" ]; then
+            notifier_args+=(-execute "$click_command")
+        fi
+        "$CODEX_NOTIFY_TERMINAL_NOTIFIER" "${notifier_args[@]}" >/dev/null 2>&1 &
+        return 0
+    fi
+
+    show_popup_with_osascript "$title" "$message"
+}
+
+shell_single_quote() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+build_click_command() {
+    local project_path="$1"
+    local helper="${CODEX_NOTIFY_CLICK_HANDLER:-}"
+    local quoted_helper=""
+
+    if [ -z "$helper" ] || [ ! -x "$helper" ]; then
+        return 1
+    fi
+
+    quoted_helper="$(shell_single_quote "$helper")"
+    if [ -n "$project_path" ]; then
+        printf '%s %s\n' "$quoted_helper" "$(shell_single_quote "$project_path")"
+        return 0
+    fi
+
+    printf '%s\n' "$quoted_helper"
+}
+
+show_popup_with_osascript() {
+    local title="$1"
+    local message="$2"
     local escaped_title=""
     local escaped_message=""
 
-    if [ "$CODEX_NOTIFY_POPUP" != "1" ] || [ ! -x /usr/bin/osascript ]; then
+    if [ ! -x /usr/bin/osascript ]; then
         return 0
     fi
 
@@ -84,7 +142,7 @@ notify_with_project() {
 
     log_notification "$kind" "$message"
     play_sound "$sound_path"
-    show_popup "$CODEX_NOTIFY_TITLE" "$message"
+    show_popup "$CODEX_NOTIFY_TITLE" "$message" "$project_path"
 }
 
 notify_task_complete() {

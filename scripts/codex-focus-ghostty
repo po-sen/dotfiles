@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+project_path="${1:-}"
+ghostty_bundle_id="${CODEX_NOTIFY_GHOSTTY_BUNDLE_ID:-com.mitchellh.ghostty}"
+click_log_file="${CODEX_NOTIFY_CLICK_LOG_FILE:-$HOME/.codex/codex-notify-click.log}"
+resolved_project_path=""
+project_name=""
+result=""
+
+if [ -n "$project_path" ] && [ -d "$project_path" ]; then
+    resolved_project_path="$(
+        cd "$project_path" >/dev/null 2>&1 && pwd -P
+    )"
+fi
+if [ -n "$project_path" ]; then
+    project_name="$(basename "$project_path")"
+fi
+
+if [ ! -x /usr/bin/osascript ]; then
+    exit 0
+fi
+
+result="$(
+    /usr/bin/osascript - "$ghostty_bundle_id" "$project_path" "$resolved_project_path" "$project_name" <<'APPLESCRIPT' 2>/dev/null
+on run argv
+    set ghosttyBundleID to item 1 of argv
+    set projectPath to ""
+    set resolvedProjectPath to ""
+    set projectName to ""
+    set directoryPrefix to ""
+    set resolvedDirectoryPrefix to ""
+    set terminalWorkingDirectory to ""
+    set terminalName to ""
+
+    if (count of argv) > 1 then
+        set projectPath to item 2 of argv
+    end if
+    if (count of argv) > 2 then
+        set resolvedProjectPath to item 3 of argv
+    end if
+    if (count of argv) > 3 then
+        set projectName to item 4 of argv
+    end if
+
+    if projectPath is not "" then
+        set directoryPrefix to projectPath
+        if directoryPrefix does not end with "/" then
+            set directoryPrefix to directoryPrefix & "/"
+        end if
+    end if
+    if resolvedProjectPath is not "" then
+        set resolvedDirectoryPrefix to resolvedProjectPath
+        if resolvedDirectoryPrefix does not end with "/" then
+            set resolvedDirectoryPrefix to resolvedDirectoryPrefix & "/"
+        end if
+    end if
+
+    using terms from application "Ghostty"
+        tell application id ghosttyBundleID
+            activate
+
+            if projectPath is "" then
+                return "activated-only"
+            end if
+
+            repeat 12 times
+                repeat with terminalItem in every terminal
+                    set terminalWorkingDirectory to ""
+                    set terminalName to ""
+
+                    try
+                        set terminalWorkingDirectory to working directory of terminalItem
+                    end try
+                    try
+                        set terminalName to name of terminalItem
+                    end try
+
+                    if projectPath is not "" and terminalWorkingDirectory is projectPath then
+                        focus terminalItem
+                        return "focused:" & terminalWorkingDirectory & ":" & terminalName
+                    end if
+                    if resolvedProjectPath is not "" and terminalWorkingDirectory is resolvedProjectPath then
+                        focus terminalItem
+                        return "focused:" & terminalWorkingDirectory & ":" & terminalName
+                    end if
+                    if directoryPrefix is not "" and terminalWorkingDirectory starts with directoryPrefix then
+                        focus terminalItem
+                        return "focused:" & terminalWorkingDirectory & ":" & terminalName
+                    end if
+                    if resolvedDirectoryPrefix is not "" and terminalWorkingDirectory starts with resolvedDirectoryPrefix then
+                        focus terminalItem
+                        return "focused:" & terminalWorkingDirectory & ":" & terminalName
+                    end if
+                    if projectPath is not "" and terminalWorkingDirectory contains projectPath then
+                        focus terminalItem
+                        return "focused:" & terminalWorkingDirectory & ":" & terminalName
+                    end if
+                    if resolvedProjectPath is not "" and terminalWorkingDirectory contains resolvedProjectPath then
+                        focus terminalItem
+                        return "focused:" & terminalWorkingDirectory & ":" & terminalName
+                    end if
+                    if projectName is not "" and terminalName contains projectName then
+                        focus terminalItem
+                        return "focused:" & terminalWorkingDirectory & ":" & terminalName
+                    end if
+                end repeat
+
+                delay 0.15
+            end repeat
+
+            return "activated-no-match"
+        end tell
+    end using terms from
+end run
+APPLESCRIPT
+)" || result="osascript-error"
+
+if [ -n "$click_log_file" ]; then
+    mkdir -p "$(dirname "$click_log_file")" 2>/dev/null || true
+    printf '%s\t%s\t%s\t%s\n' \
+        "$(date '+%Y-%m-%d %H:%M:%S')" \
+        "${project_path:-<empty>}" \
+        "${resolved_project_path:-<empty>}" \
+        "${result:-<empty>}" >> "$click_log_file" 2>/dev/null || true
+fi
