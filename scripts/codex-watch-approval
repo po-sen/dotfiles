@@ -5,9 +5,7 @@ set -euo pipefail
 script_dir="$(
     cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P
 )"
-
-# shellcheck source=/Users/posen/dotfiles/scripts/codex-notify-common
-. "$script_dir/codex-notify-common"
+notify_command="${CODEX_NOTIFY_COMMAND:-$script_dir/codex-notify}"
 
 CODEX_SESSIONS_DIR="${CODEX_NOTIFY_SESSIONS_DIR:-$HOME/.codex/sessions}"
 CODEX_SHELL_SNAPSHOTS_DIR="${CODEX_NOTIFY_SHELL_SNAPSHOTS_DIR:-$HOME/.codex/shell_snapshots}"
@@ -132,7 +130,7 @@ process_event_line() {
     has_notified_line "$line" && return 0
 
     mark_line_notified "$line"
-    notify_approval_required "$project_path"
+    "$notify_command" --approval-notify "$project_path"
 }
 
 scan_existing_events() {
