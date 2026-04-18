@@ -130,6 +130,14 @@ def main() -> int:
     if pid == 0:
         os.execvp(argv[0], argv)
 
+    child_pid_file = os.environ.get("CODEX_NOTIFY_CHILD_PID_FILE", "")
+    if child_pid_file:
+        try:
+            with open(child_pid_file, "w", encoding="utf-8") as handle:
+                handle.write(f"{pid}\n")
+        except OSError:
+            pass
+
     stdin_fd = sys.stdin.fileno()
     stdout = sys.stdout.buffer
     stripper = NotificationStripper()

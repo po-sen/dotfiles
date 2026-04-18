@@ -1,0 +1,354 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(
+    cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd -P
+)"
+
+touch_utc() {
+    TZ=UTC touch -t "$@"
+}
+
+assert_contains() {
+    local haystack="$1"
+    local needle="$2"
+
+    if ! grep -Fq -- "$needle" "$haystack"; then
+        echo "expected to find '$needle' in $haystack" >&2
+        return 1
+    fi
+}
+
+assert_not_contains() {
+    local haystack="$1"
+    local needle="$2"
+
+    if grep -Fq -- "$needle" "$haystack"; then
+        echo "did not expect to find '$needle' in $haystack" >&2
+        return 1
+    fi
+}
+
+run_pid_lsof_test() {
+    local tmpdir=""
+    local marker_file=""
+    local pid_file=""
+    local log_file=""
+    local lsof_file=""
+    local fake_lsof=""
+    local sessions_dir=""
+    local old_session=""
+    local middle_session=""
+    local new_session=""
+    local other_session=""
+    local watcher_pid=""
+    local sleeper_pid=""
+
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "$tmpdir"' RETURN
+
+    marker_file="$tmpdir/marker"
+    pid_file="$tmpdir/pid"
+    log_file="$tmpdir/notify.log"
+    lsof_file="$tmpdir/lsof.out"
+    fake_lsof="$tmpdir/fake-lsof"
+    sessions_dir="$tmpdir/sessions/2026/04/18"
+    mkdir -p "$sessions_dir"
+
+    old_session="$sessions_dir/rollout-2026-04-18T20-00-00-old.jsonl"
+    middle_session="$sessions_dir/rollout-2026-04-18T20-02-30-middle.jsonl"
+    new_session="$sessions_dir/rollout-2026-04-18T20-00-01-new.jsonl"
+    other_session="$sessions_dir/rollout-2026-04-18T20-00-02-other.jsonl"
+
+    cat > "$old_session" <<'EOF'
+{"timestamp":"2026-04-18T12:01:05.000Z","type":"session_meta","payload":{"id":"old","timestamp":"2026-04-18T12:01:00.000Z","cwd":"/Users/posen/dotfiles"}}
+EOF
+    cat > "$middle_session" <<'EOF'
+{"timestamp":"2026-04-18T12:02:35.000Z","type":"session_meta","payload":{"id":"middle","timestamp":"2026-04-18T12:02:30.000Z","cwd":"/Users/posen/dotfiles"}}
+EOF
+    cat > "$new_session" <<'EOF'
+{"timestamp":"2026-04-18T12:03:05.000Z","type":"session_meta","payload":{"id":"new","timestamp":"2026-04-18T12:03:00.000Z","cwd":"/Users/posen/dotfiles"}}
+EOF
+    cat > "$other_session" <<'EOF'
+{"timestamp":"2026-04-18T12:03:05.000Z","type":"session_meta","payload":{"id":"other","timestamp":"2026-04-18T12:03:00.000Z","cwd":"/Users/posen/other"}}
+EOF
+
+    : > "$marker_file"
+    touch_utc 202604181202 "$marker_file"
+    touch_utc 202604181203 "$old_session" "$middle_session" "$new_session" "$other_session"
+
+    cat > "$lsof_file" <<EOF
+n$old_session
+n$middle_session
+n$new_session
+n$other_session
+EOF
+    cat > "$fake_lsof" <<'EOF'
+#!/usr/bin/env bash
+cat "$CODEX_NOTIFY_TEST_LSOF_OUTPUT_FILE"
+EOF
+    chmod +x "$fake_lsof"
+
+    sleep 30 &
+    sleeper_pid=$!
+    printf '%s\n' "$sleeper_pid" > "$pid_file"
+
+    CODEX_NOTIFY_SESSIONS_DIR="$tmpdir/sessions" \
+    CODEX_NOTIFY_LOG_FILE="$log_file" \
+    CODEX_NOTIFY_POPUP=0 \
+    CODEX_NOTIFY_LSOF_BIN="$fake_lsof" \
+    CODEX_NOTIFY_TEST_LSOF_OUTPUT_FILE="$lsof_file" \
+    "$repo_root/scripts/codex-watch-approval" "$marker_file" ignored /Users/posen/dotfiles "$pid_file" &
+    watcher_pid=$!
+
+    sleep 1
+
+    cat >> "$old_session" <<'EOF'
+{"timestamp":"2026-04-18T12:03:30.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call_old","arguments":"{\"cmd\":\"old\",\"sandbox_permissions\":\"require_escalated\",\"justification\":\"old approval\"}"}}
+EOF
+    cat >> "$middle_session" <<'EOF'
+{"timestamp":"2026-04-18T12:03:30.500Z","type":"response_item","payload":{"type":"function_call","call_id":"call_middle","arguments":"{\"cmd\":\"middle\",\"sandbox_permissions\":\"require_escalated\",\"justification\":\"middle approval\"}"}}
+EOF
+    cat >> "$new_session" <<'EOF'
+{"timestamp":"2026-04-18T12:03:31.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call_new","arguments":"{\"cmd\":\"new\",\"sandbox_permissions\":\"require_escalated\",\"justification\":\"new approval\"}"}}
+EOF
+    cat >> "$other_session" <<'EOF'
+{"timestamp":"2026-04-18T12:03:32.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call_other","arguments":"{\"cmd\":\"other\",\"sandbox_permissions\":\"require_escalated\",\"justification\":\"other approval\"}"}}
+EOF
+
+    sleep 2
+    kill "$watcher_pid" >/dev/null 2>&1 || true
+    wait "$watcher_pid" >/dev/null 2>&1 || true
+    kill "$sleeper_pid" >/dev/null 2>&1 || true
+    wait "$sleeper_pid" >/dev/null 2>&1 || true
+
+    assert_contains "$log_file" "new approval"
+    assert_not_contains "$log_file" "old approval"
+    assert_not_contains "$log_file" "middle approval"
+    assert_not_contains "$log_file" "other approval"
+}
+
+run_fallback_scan_test() {
+    local tmpdir=""
+    local marker_file=""
+    local log_file=""
+    local sessions_dir=""
+    local older_session=""
+    local newer_session=""
+    local watcher_pid=""
+
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "$tmpdir"' RETURN
+
+    marker_file="$tmpdir/marker"
+    log_file="$tmpdir/notify.log"
+    sessions_dir="$tmpdir/sessions/2026/04/18"
+    mkdir -p "$sessions_dir"
+    older_session="$sessions_dir/rollout-2026-04-18T20-10-30-fallback-old.jsonl"
+    newer_session="$sessions_dir/rollout-2026-04-18T20-11-00-fallback-new.jsonl"
+
+    : > "$marker_file"
+    touch_utc 202604181210 "$marker_file"
+    cat > "$older_session" <<'EOF'
+{"timestamp":"2026-04-18T12:10:35.000Z","type":"session_meta","payload":{"id":"fallback-old","timestamp":"2026-04-18T12:10:30.000Z","cwd":"/Users/posen/dotfiles"}}
+EOF
+    cat > "$newer_session" <<'EOF'
+{"timestamp":"2026-04-18T12:11:05.000Z","type":"session_meta","payload":{"id":"fallback-new","timestamp":"2026-04-18T12:11:00.000Z","cwd":"/Users/posen/dotfiles"}}
+EOF
+    touch_utc 202604181211 "$older_session" "$newer_session"
+
+    CODEX_NOTIFY_SESSIONS_DIR="$tmpdir/sessions" \
+    CODEX_NOTIFY_LOG_FILE="$log_file" \
+    CODEX_NOTIFY_POPUP=0 \
+    CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT=5 \
+    "$repo_root/scripts/codex-watch-approval" "$marker_file" ignored /Users/posen/dotfiles &
+    watcher_pid=$!
+
+    sleep 1
+    cat >> "$older_session" <<'EOF'
+{"timestamp":"2026-04-18T12:11:30.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call_fallback_old","arguments":"{\"cmd\":\"fallback-old\",\"sandbox_permissions\":\"require_escalated\",\"justification\":\"fallback old approval\"}"}}
+EOF
+    cat >> "$newer_session" <<'EOF'
+{"timestamp":"2026-04-18T12:11:31.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call_fallback_new","arguments":"{\"cmd\":\"fallback-new\",\"sandbox_permissions\":\"require_escalated\",\"justification\":\"fallback new approval\"}"}}
+EOF
+
+    sleep 2
+    kill "$watcher_pid" >/dev/null 2>&1 || true
+    wait "$watcher_pid" >/dev/null 2>&1 || true
+
+    assert_contains "$log_file" "fallback new approval"
+    assert_not_contains "$log_file" "fallback old approval"
+}
+
+run_wait_for_pid_test() {
+    local tmpdir=""
+    local marker_file=""
+    local pid_file=""
+    local log_file=""
+    local lsof_file=""
+    local fake_lsof=""
+    local sessions_dir=""
+    local fallback_session=""
+    local pid_session=""
+    local watcher_pid=""
+    local sleeper_pid=""
+
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "$tmpdir"' RETURN
+
+    marker_file="$tmpdir/marker"
+    pid_file="$tmpdir/pid"
+    log_file="$tmpdir/notify.log"
+    lsof_file="$tmpdir/lsof.out"
+    fake_lsof="$tmpdir/fake-lsof"
+    sessions_dir="$tmpdir/sessions/2026/04/18"
+    mkdir -p "$sessions_dir"
+
+    fallback_session="$sessions_dir/rollout-2026-04-18T20-20-30-fallback.jsonl"
+    pid_session="$sessions_dir/rollout-2026-04-18T20-21-00-pid.jsonl"
+
+    : > "$marker_file"
+    : > "$pid_file"
+    touch_utc 202604181220 "$marker_file"
+    cat > "$fallback_session" <<'EOF'
+{"timestamp":"2026-04-18T12:20:35.000Z","type":"session_meta","payload":{"id":"fallback","timestamp":"2026-04-18T12:20:30.000Z","cwd":"/Users/posen/dotfiles"}}
+EOF
+    touch_utc 202604181221 "$fallback_session"
+
+    cat > "$lsof_file" <<EOF
+n$pid_session
+EOF
+    cat > "$fake_lsof" <<'EOF'
+#!/usr/bin/env bash
+cat "$CODEX_NOTIFY_TEST_LSOF_OUTPUT_FILE"
+EOF
+    chmod +x "$fake_lsof"
+
+    CODEX_NOTIFY_SESSIONS_DIR="$tmpdir/sessions" \
+    CODEX_NOTIFY_LOG_FILE="$log_file" \
+    CODEX_NOTIFY_POPUP=0 \
+    CODEX_NOTIFY_LSOF_BIN="$fake_lsof" \
+    CODEX_NOTIFY_TEST_LSOF_OUTPUT_FILE="$lsof_file" \
+    CODEX_NOTIFY_PID_FILE_WAIT_SECONDS=3 \
+    CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT=5 \
+    "$repo_root/scripts/codex-watch-approval" "$marker_file" ignored /Users/posen/dotfiles "$pid_file" &
+    watcher_pid=$!
+
+    sleep 1
+    cat >> "$fallback_session" <<'EOF'
+{"timestamp":"2026-04-18T12:20:50.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call_wait_fallback","arguments":"{\"cmd\":\"fallback\",\"sandbox_permissions\":\"require_escalated\",\"justification\":\"fallback before pid\"}"}}
+EOF
+
+    cat > "$pid_session" <<'EOF'
+{"timestamp":"2026-04-18T12:21:05.000Z","type":"session_meta","payload":{"id":"pid","timestamp":"2026-04-18T12:21:00.000Z","cwd":"/Users/posen/dotfiles"}}
+EOF
+    touch_utc 202604181221 "$pid_session"
+
+    sleep 30 &
+    sleeper_pid=$!
+    printf '%s\n' "$sleeper_pid" > "$pid_file"
+
+    sleep 1
+    cat >> "$pid_session" <<'EOF'
+{"timestamp":"2026-04-18T12:21:30.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call_wait_pid","arguments":"{\"cmd\":\"pid\",\"sandbox_permissions\":\"require_escalated\",\"justification\":\"pid approval\"}"}}
+EOF
+
+    sleep 2
+    kill "$watcher_pid" >/dev/null 2>&1 || true
+    wait "$watcher_pid" >/dev/null 2>&1 || true
+    kill "$sleeper_pid" >/dev/null 2>&1 || true
+    wait "$sleeper_pid" >/dev/null 2>&1 || true
+
+    assert_contains "$log_file" "pid approval"
+    assert_not_contains "$log_file" "fallback before pid"
+}
+
+run_pid_replaces_fallback_test() {
+    local tmpdir=""
+    local marker_file=""
+    local pid_file=""
+    local log_file=""
+    local lsof_file=""
+    local fake_lsof=""
+    local sessions_dir=""
+    local fallback_session=""
+    local pid_session=""
+    local watcher_pid=""
+    local sleeper_pid=""
+
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "$tmpdir"' RETURN
+
+    marker_file="$tmpdir/marker"
+    pid_file="$tmpdir/pid"
+    log_file="$tmpdir/notify.log"
+    lsof_file="$tmpdir/lsof.out"
+    fake_lsof="$tmpdir/fake-lsof"
+    sessions_dir="$tmpdir/sessions/2026/04/18"
+    mkdir -p "$sessions_dir"
+
+    fallback_session="$sessions_dir/rollout-2026-04-18T20-30-30-fallback.jsonl"
+    pid_session="$sessions_dir/rollout-2026-04-18T20-31-00-pid.jsonl"
+
+    : > "$marker_file"
+    : > "$pid_file"
+    touch_utc 202604181230 "$marker_file"
+    cat > "$fallback_session" <<'EOF'
+{"timestamp":"2026-04-18T12:30:35.000Z","type":"session_meta","payload":{"id":"fallback","timestamp":"2026-04-18T12:30:30.000Z","cwd":"/Users/posen/dotfiles"}}
+EOF
+    touch_utc 202604181231 "$fallback_session"
+
+    cat > "$lsof_file" <<EOF
+n$pid_session
+EOF
+    cat > "$fake_lsof" <<'EOF'
+#!/usr/bin/env bash
+cat "$CODEX_NOTIFY_TEST_LSOF_OUTPUT_FILE"
+EOF
+    chmod +x "$fake_lsof"
+
+    CODEX_NOTIFY_SESSIONS_DIR="$tmpdir/sessions" \
+    CODEX_NOTIFY_LOG_FILE="$log_file" \
+    CODEX_NOTIFY_POPUP=0 \
+    CODEX_NOTIFY_LSOF_BIN="$fake_lsof" \
+    CODEX_NOTIFY_TEST_LSOF_OUTPUT_FILE="$lsof_file" \
+    CODEX_NOTIFY_PID_FILE_WAIT_SECONDS=0 \
+    CODEX_NOTIFY_SESSION_DISCOVERY_TIMEOUT=5 \
+    "$repo_root/scripts/codex-watch-approval" "$marker_file" ignored /Users/posen/dotfiles "$pid_file" &
+    watcher_pid=$!
+
+    sleep 1
+    cat > "$pid_session" <<'EOF'
+{"timestamp":"2026-04-18T12:31:05.000Z","type":"session_meta","payload":{"id":"pid","timestamp":"2026-04-18T12:31:00.000Z","cwd":"/Users/posen/dotfiles"}}
+EOF
+    touch_utc 202604181231 "$pid_session"
+
+    sleep 30 &
+    sleeper_pid=$!
+    printf '%s\n' "$sleeper_pid" > "$pid_file"
+
+    sleep 1
+    cat >> "$fallback_session" <<'EOF'
+{"timestamp":"2026-04-18T12:31:20.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call_stale_fallback","arguments":"{\"cmd\":\"fallback-stale\",\"sandbox_permissions\":\"require_escalated\",\"justification\":\"stale fallback approval\"}"}}
+EOF
+    cat >> "$pid_session" <<'EOF'
+{"timestamp":"2026-04-18T12:31:21.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call_replaced_pid","arguments":"{\"cmd\":\"pid-replaced\",\"sandbox_permissions\":\"require_escalated\",\"justification\":\"replacement pid approval\"}"}}
+EOF
+
+    sleep 2
+    kill "$watcher_pid" >/dev/null 2>&1 || true
+    wait "$watcher_pid" >/dev/null 2>&1 || true
+    kill "$sleeper_pid" >/dev/null 2>&1 || true
+    wait "$sleeper_pid" >/dev/null 2>&1 || true
+
+    assert_contains "$log_file" "replacement pid approval"
+    assert_not_contains "$log_file" "stale fallback approval"
+}
+
+run_pid_lsof_test
+run_fallback_scan_test
+run_wait_for_pid_test
+run_pid_replaces_fallback_test
+
+echo "codex-watch-approval tests passed"

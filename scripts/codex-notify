@@ -402,6 +402,9 @@ cleanup() {
         kill "$watcher_pid" >/dev/null 2>&1 || true
         wait "$watcher_pid" 2>/dev/null || true
     fi
+    if [ -n "${child_pid_file:-}" ] && [ -e "$child_pid_file" ]; then
+        rm -f "$child_pid_file"
+    fi
     if [ -n "${marker_file:-}" ] && [ -e "$marker_file" ]; then
         rm -f "$marker_file"
     fi
@@ -464,6 +467,7 @@ main() {
     local run_marker=""
     local approval_watcher=""
     local terminal_filter=""
+    local child_pid_file=""
     local -a codex_args=()
 
     if handle_script_mode "$@"; then
@@ -478,19 +482,20 @@ main() {
     terminal_filter="$script_dir/codex-terminal-filter"
     requested_cwd="$(parse_requested_cwd "$@")"
     marker_file="$(mktemp)"
+    child_pid_file="$(mktemp)"
     run_marker="$(new_run_marker)"
     watcher_pid=""
     trap cleanup EXIT
 
     if [ "$CODEX_NOTIFY_APPROVAL_WATCHER" = "1" ]; then
-        "$approval_watcher" "$marker_file" "$run_marker" "$requested_cwd" &
+        "$approval_watcher" "$marker_file" "$run_marker" "$requested_cwd" "$child_pid_file" &
         watcher_pid=$!
     fi
 
     printf -v notify_config 'notify=["%s","--native-handler"]' "$script_dir/codex-notify"
     codex_args=(-c "$notify_config" -c 'tui.notifications=false' "$@")
     if [ -x "$terminal_filter" ]; then
-        CODEX_NOTIFY_RUN_MARKER="$run_marker" "$terminal_filter" "$CODEX_BIN" "${codex_args[@]}"
+        CODEX_NOTIFY_CHILD_PID_FILE="$child_pid_file" CODEX_NOTIFY_RUN_MARKER="$run_marker" "$terminal_filter" "$CODEX_BIN" "${codex_args[@]}"
         return
     fi
     CODEX_NOTIFY_RUN_MARKER="$run_marker" "$CODEX_BIN" "${codex_args[@]}"
