@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -euo pipefail
 
@@ -6,17 +6,23 @@ script_dir="$(
     cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P
 )"
 
-CODEX_BIN="${CODEX_NOTIFY_CODEX_BIN:-$(command -v codex)}"
-CODEX_NOTIFY_APPROVAL_WATCHER="${CODEX_NOTIFY_APPROVAL_WATCHER:-1}"
+if [ -z "${HOME:-}" ]; then
+    HOME="$(
+        cd ~ >/dev/null 2>&1 && pwd -P
+    )"
+    export HOME
+fi
+
+CODEX_BIN="${CODEX_NOTIFY_CODEX_BIN:-}"
 CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-/System/Library/Sounds/Funk.aiff}"
-CODEX_APPROVAL_SOUND="${CODEX_APPROVAL_SOUND:-/System/Library/Sounds/Hero.aiff}"
 CODEX_NOTIFY_POPUP="${CODEX_NOTIFY_POPUP:-1}"
-CODEX_NOTIFY_LOG_FILE="${CODEX_NOTIFY_LOG_FILE:-}"
+CODEX_NOTIFY_LOG_FILE="${CODEX_NOTIFY_LOG_FILE:-$HOME/.codex/logs/codex-notify.log}"
 CODEX_NOTIFY_TITLE="${CODEX_NOTIFY_TITLE:-Codex}"
 CODEX_NOTIFY_TERMINAL_NOTIFIER="${CODEX_NOTIFY_TERMINAL_NOTIFIER:-}"
 CODEX_NOTIFY_CLICK_HANDLER="${CODEX_NOTIFY_CLICK_HANDLER:-$script_dir/codex-focus-ghostty}"
 CODEX_NOTIFY_GHOSTTY_BUNDLE_ID="${CODEX_NOTIFY_GHOSTTY_BUNDLE_ID:-com.mitchellh.ghostty}"
 CODEX_NOTIFY_MESSAGE_MAX_CHARS="${CODEX_NOTIFY_MESSAGE_MAX_CHARS:-90}"
+CODEX_NOTIFY_PYTHON_BIN="${CODEX_NOTIFY_PYTHON_BIN:-/usr/bin/python3}"
 
 resolve_terminal_notifier() {
     local candidate=""
@@ -26,6 +32,23 @@ resolve_terminal_notifier() {
         /opt/homebrew/bin/terminal-notifier \
         /usr/local/bin/terminal-notifier \
         "$(command -v terminal-notifier 2>/dev/null || true)"; do
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+resolve_codex_bin() {
+    local candidate=""
+
+    for candidate in \
+        "$CODEX_BIN" \
+        /opt/homebrew/bin/codex \
+        /usr/local/bin/codex \
+        "$(command -v codex 2>/dev/null || true)"; do
         if [ -n "$candidate" ] && [ -x "$candidate" ]; then
             printf '%s\n' "$candidate"
             return 0
@@ -50,7 +73,7 @@ json_get_string() {
     local payload="$1"
     local key="$2"
 
-    python3 - "$payload" "$key" <<'PY'
+    "$CODEX_NOTIFY_PYTHON_BIN" - "$payload" "$key" <<'PY'
 import json
 import sys
 
@@ -67,64 +90,72 @@ if isinstance(value, str):
 PY
 }
 
-approval_detail_from_event() {
+json_find_string() {
     local payload="$1"
+    shift
 
-    python3 - "$payload" <<'PY'
+    "$CODEX_NOTIFY_PYTHON_BIN" - "$payload" "$@" <<'PY'
 import json
 import sys
 
 payload = sys.argv[1]
-
-def pick_value(obj):
-    if not isinstance(obj, dict):
-        return ""
-    for key in ("justification", "reason"):
-        value = obj.get(key)
-        if isinstance(value, str) and value.strip():
-            return value
-    value = obj.get("cmd")
-    if isinstance(value, str) and value.strip():
-        return value
-    command = obj.get("command")
-    if isinstance(command, list) and command:
-        return " ".join(str(part) for part in command)
-    if isinstance(command, str) and command.strip():
-        return command
-    return ""
-
-detail = ""
+keys = sys.argv[2:]
 
 try:
-    outer = json.loads(payload)
+    data = json.loads(payload)
 except Exception:
-    outer = None
+    data = None
 
-if isinstance(outer, dict):
-    detail = pick_value(outer.get("payload"))
-    if not detail:
-        arguments = outer.get("payload", {}).get("arguments")
-        if isinstance(arguments, str):
-            try:
-                detail = pick_value(json.loads(arguments))
-            except Exception:
-                detail = ""
+def walk(value):
+    if isinstance(value, dict):
+        for key in keys:
+            item = value.get(key)
+            if isinstance(item, str) and item.strip():
+                sys.stdout.write(item)
+                return True
+        for item in value.values():
+            if walk(item):
+                return True
+    elif isinstance(value, list):
+        for item in value:
+            if walk(item):
+                return True
+    return False
 
-sys.stdout.write(detail)
+if data is not None:
+    walk(data)
 PY
 }
 
-approval_detail_from_arg() {
-    local detail="${1:-}"
+notification_type_from_payload() {
+    local payload="$1"
+    local event_type=""
 
-    case "$detail" in
-        \{*)
-            approval_detail_from_event "$detail"
-            ;;
-        *)
-            printf '%s' "$detail"
-            ;;
-    esac
+    event_type="$(json_get_string "$payload" "type")"
+    if [ -z "$event_type" ]; then
+        event_type="$(json_get_string "$payload" "method")"
+    fi
+    if [ -z "$event_type" ]; then
+        case "$payload" in
+            *'"type":"agent-turn-complete"'*)
+                event_type="agent-turn-complete"
+                ;;
+            *'"type":"approval-requested"'*)
+                event_type="approval-requested"
+                ;;
+            *'"method":"item/commandExecution/requestApproval"'*)
+                event_type="item/commandExecution/requestApproval"
+                ;;
+            *'"method":"item/fileChange/requestApproval"'*)
+                event_type="item/fileChange/requestApproval"
+                ;;
+            *'"method":"item/permissions/requestApproval"'*)
+                event_type="item/permissions/requestApproval"
+                ;;
+        esac
+    fi
+
+    printf '%s\n' "$event_type"
 }
 
 project_name_from_path() {
@@ -141,12 +172,94 @@ project_path_from_payload() {
     local payload="$1"
     local project_path=""
 
-    project_path="$(extract_json_field "cwd" "$payload")"
+    project_path="$(json_find_string "$payload" "cwd" "working_directory")"
+    if [ -z "$project_path" ]; then
+        project_path="$(extract_json_field "cwd" "$payload")"
+    fi
     if [ -z "$project_path" ]; then
         project_path="$(extract_json_field "working_directory" "$payload")"
     fi
 
     printf '%s\n' "$project_path"
+}
+
+approval_detail_from_payload() {
+    local payload="$1"
+
+    "$CODEX_NOTIFY_PYTHON_BIN" - "$payload" <<'PY'
+import json
+import sys
+
+payload = sys.argv[1]
+
+try:
+    data = json.loads(payload)
+except Exception:
+    data = None
+
+def first_string(value, keys):
+    if isinstance(value, dict):
+        for key in keys:
+            item = value.get(key)
+            if isinstance(item, str) and item.strip():
+                return item.strip()
+        for item in value.values():
+            found = first_string(item, keys)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = first_string(item, keys)
+            if found:
+                return found
+    return ""
+
+if data is None:
+    sys.exit(0)
+
+parts = []
+
+reason = first_string(data, ["reason", "message", "description", "prompt"])
+if reason:
+    parts.append(reason)
+
+command = first_string(data, ["command"])
+if command:
+    parts.append(f"Command: {command}")
+
+host = first_string(data, ["host"])
+protocol = first_string(data, ["protocol"])
+port = first_string(data, ["port"])
+if host:
+    network = f"Network: {host}"
+    if port:
+        network += f":{port}"
+    if protocol:
+        network += f" ({protocol})"
+    parts.append(network)
+
+grant_root = first_string(data, ["grantRoot"])
+if grant_root:
+    parts.append(f"Path: {grant_root}")
+
+tool_name = first_string(data, ["tool_name", "toolName"])
+if tool_name and not command:
+    parts.append(f"Tool: {tool_name}")
+
+deduped = []
+seen = set()
+for part in parts:
+    normalized = part.strip()
+    if not normalized:
+        continue
+    key = normalized.casefold()
+    if key in seen:
+        continue
+    seen.add(key)
+    deduped.append(normalized)
+
+sys.stdout.write(" | ".join(deduped[:3]))
+PY
 }
 
 log_notification() {
@@ -157,6 +270,7 @@ log_notification() {
     log_message="$(printf '%s' "$message" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
 
     if [ -n "$CODEX_NOTIFY_LOG_FILE" ]; then
+        mkdir -p "$(dirname "$CODEX_NOTIFY_LOG_FILE")"
         printf '%s\t%s\t%s\n' "$kind" "$(date '+%Y-%m-%d %H:%M:%S')" "$log_message" >> "$CODEX_NOTIFY_LOG_FILE"
     fi
 }
@@ -244,7 +358,7 @@ show_popup() {
 normalize_notification_text() {
     local text="$1"
 
-    python3 - "$text" <<'PY'
+    "$CODEX_NOTIFY_PYTHON_BIN" - "$text" <<'PY'
 import re
 import sys
 
@@ -267,7 +381,7 @@ PY
 first_line_notification_text() {
     local text="$1"
 
-    python3 - "$text" <<'PY'
+    "$CODEX_NOTIFY_PYTHON_BIN" - "$text" <<'PY'
 import sys
 
 text = sys.argv[1]
@@ -280,7 +394,7 @@ truncate_notification_text() {
     local text="$1"
     local max_chars="${2:-$CODEX_NOTIFY_MESSAGE_MAX_CHARS}"
 
-    python3 - "$text" "$max_chars" <<'PY'
+    "$CODEX_NOTIFY_PYTHON_BIN" - "$text" "$max_chars" <<'PY'
 import sys
 
 text = sys.argv[1].strip()
@@ -357,24 +471,30 @@ notify_task_complete() {
     notify_with_project "task_complete" "$CODEX_NOTIFY_SOUND" "finished" "Open Codex for details." "${1:-}" "${2:-}"
 }
 
-notify_approval_required() {
-    notify_with_project "approval_required" "$CODEX_APPROVAL_SOUND" "needs approval" "Open Codex to review." "${1:-}" "${2:-}"
+notify_approval_requested() {
+    notify_with_project "approval_requested" "$CODEX_NOTIFY_SOUND" "needs approval" "Review the pending approval in Codex." "${1:-}" "${2:-}"
 }
 
 handle_native_payload() {
     local payload="${1:-}"
+    local event_type=""
     local project_path=""
     local detail=""
 
+    event_type="$(notification_type_from_payload "$payload")"
     project_path="$(project_path_from_payload "$payload")"
     if [ -z "$project_path" ]; then
         project_path="${PWD:-}"
     fi
 
-    case "$payload" in
-        *'"type":"agent-turn-complete"'*)
+    case "$event_type" in
+        agent-turn-complete)
             detail="$(json_get_string "$payload" "last-assistant-message")"
             notify_task_complete "$project_path" "$detail"
+            ;;
+        approval-requested|item/commandExecution/requestApproval|item/fileChange/requestApproval|item/permissions/requestApproval)
+            detail="$(approval_detail_from_payload "$payload")"
+            notify_approval_requested "$project_path" "$detail"
             ;;
     esac
 }
@@ -386,119 +506,24 @@ handle_script_mode() {
             handle_native_payload "${1:-}"
             return 0
             ;;
-        --approval-notify)
-            shift
-            notify_approval_required "${1:-${PWD:-}}" "$(approval_detail_from_arg "${2:-}")"
-            return 0
-            ;;
         *)
             return 1
             ;;
     esac
-}
-
-cleanup() {
-    if [ -n "${watcher_pid:-}" ]; then
-        kill "$watcher_pid" >/dev/null 2>&1 || true
-        wait "$watcher_pid" 2>/dev/null || true
-    fi
-    if [ -n "${child_pid_file:-}" ] && [ -e "$child_pid_file" ]; then
-        rm -f "$child_pid_file"
-    fi
-    if [ -n "${marker_file:-}" ] && [ -e "$marker_file" ]; then
-        rm -f "$marker_file"
-    fi
-}
-
-is_interactive_codex() {
-    if [ "$#" -eq 0 ]; then
-        return 0
-    fi
-
-    case "$1" in
-        -*|resume|fork)
-            return 0
-            ;;
-        exec|review|login|logout|mcp|marketplace|mcp-server|app-server|app|completion|sandbox|debug|apply|cloud|exec-server|features|help)
-            return 1
-            ;;
-        *)
-            return 0
-            ;;
-    esac
-}
-
-parse_requested_cwd() {
-    local requested_cwd="${PWD:-}"
-
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-            -C|--cd)
-                shift
-                if [ "$#" -gt 0 ]; then
-                    requested_cwd="$1"
-                    shift
-                fi
-                ;;
-            --cd=*)
-                requested_cwd="${1#--cd=}"
-                shift
-                ;;
-            *)
-                shift
-                ;;
-        esac
-    done
-
-    printf '%s\n' "$requested_cwd"
-}
-
-new_run_marker() {
-    if command -v uuidgen >/dev/null 2>&1; then
-        uuidgen | tr '[:upper:]' '[:lower:]'
-    else
-        printf '%s\n' "codex-notify-$$-$RANDOM-$(date '+%s')"
-    fi
 }
 
 main() {
-    local notify_config=""
-    local requested_cwd=""
-    local run_marker=""
-    local approval_watcher=""
-    local terminal_filter=""
-    local child_pid_file=""
-    local -a codex_args=()
+    local codex_bin=""
 
     if handle_script_mode "$@"; then
         return 0
     fi
 
-    if ! is_interactive_codex "$@"; then
-        exec "$CODEX_BIN" "$@"
-    fi
-
-    approval_watcher="$script_dir/codex-watch-approval"
-    terminal_filter="$script_dir/codex-terminal-filter"
-    requested_cwd="$(parse_requested_cwd "$@")"
-    marker_file="$(mktemp)"
-    child_pid_file="$(mktemp)"
-    run_marker="$(new_run_marker)"
-    watcher_pid=""
-    trap cleanup EXIT
-
-    if [ "$CODEX_NOTIFY_APPROVAL_WATCHER" = "1" ]; then
-        "$approval_watcher" "$marker_file" "$run_marker" "$requested_cwd" "$child_pid_file" &
-        watcher_pid=$!
-    fi
-
-    printf -v notify_config 'notify=["%s","--native-handler"]' "$script_dir/codex-notify"
-    codex_args=(-c "$notify_config" -c 'tui.notifications=false' "$@")
-    if [ -x "$terminal_filter" ]; then
-        CODEX_NOTIFY_CHILD_PID_FILE="$child_pid_file" CODEX_NOTIFY_RUN_MARKER="$run_marker" "$terminal_filter" "$CODEX_BIN" "${codex_args[@]}"
-        return
-    fi
-    CODEX_NOTIFY_RUN_MARKER="$run_marker" "$CODEX_BIN" "${codex_args[@]}"
+    codex_bin="$(resolve_codex_bin)" || {
+        printf 'codex-notify: unable to locate codex binary\n' >&2
+        return 1
+    }
+    exec "$codex_bin" "$@"
 }
 
 main "$@"

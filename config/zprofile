@@ -14,8 +14,6 @@ if type brew &>/dev/null; then
     compinit
 fi
 
-[[ -r "$HOME/.codexrc" ]] && . "$HOME/.codexrc"
-
 alias vi='nvim -p'
 alias vim='vim -p'
 

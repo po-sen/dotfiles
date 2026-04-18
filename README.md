@@ -11,8 +11,8 @@ This auto-detects a stable per-device fingerprint, uses a file like
 if missing. It also keeps `.tool-versions` pointed at a matching
 `tool-versions/device-xxxxxxxxxxxx`, created from `tool-versions/default` if
 needed. The repo-managed Ghostty config at `config/ghostty` is linked into
-`~/.config/ghostty/config`. It will install Homebrew first
-if Homebrew is not already present, then ensure the login shell is the
+`~/.config/ghostty/config`. It will install Homebrew first if Homebrew is
+not already present, then ensure the login shell is the
 Homebrew-installed bash after `brew bundle install` completes
 (`/opt/homebrew/bin/bash` on Apple Silicon), using `sudo` when a shell change
 is needed.
