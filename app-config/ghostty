@@ -12,6 +12,7 @@ font-thicken = true
 font-thicken-strength = 35
 alpha-blending = native
 window-vsync = true
+macos-window-shadow = false
 macos-option-as-alt = left
 
 # Run login bash so shell profile exports are available to Codex.
@@ -78,14 +79,24 @@ window-save-state = always
 # ===== notifications =====
 shell-integration = detect
 shell-integration-features = cursor,sudo,title,path,ssh-env,ssh-terminfo
-notify-on-command-finish = unfocused
-notify-on-command-finish-action = bell,notify
-notify-on-command-finish-after = 10s
 
 # ===== bell =====
 bell-features = system,no-audio,no-attention,no-title,no-border
 
+# ===== clear workaround =====
+# Work around stale content after the first clear on macOS.
+keybind = cmd+k=clear_screen
+keybind = chain=clear_screen
+
+# ===== terminal controls =====
+keybind = cmd+shift+j=write_screen_file:open,plain
+keybind = cmd+alt+shift+j=write_screen_file:paste,plain
+keybind = cmd+shift+r=toggle_readonly
+keybind = cmd+shift+m=toggle_mouse_reporting
+
 # ===== iTerm-like split behavior =====
+split-preserve-zoom = navigation
+
 # 右分割後自動 equalize
 keybind = cmd+d=new_split:right
 keybind = chain=equalize_splits
