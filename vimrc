@@ -146,6 +146,8 @@ nnoremap gw :Gwrite<cr>
 noremap <s-tab> :'<,'>w !pbcopy<cr><cr>
 noremap , <c-e>
 noremap ; <c-y>
+noremap <c-,> zh
+noremap <c-;> zl
 noremap <leader>, <c-d>
 noremap <leader>; <c-u>
 noremap <leader><left>  <c-w>h
