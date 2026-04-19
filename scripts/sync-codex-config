@@ -1,0 +1,80 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+
+root = File.expand_path("..", __dir__)
+config_path = File.expand_path("~/.codex/config.toml")
+fragment_path = File.join(root, "config", "codex-notifications.toml")
+
+lines = File.exist?(config_path) ? File.readlines(config_path, chomp: true) : []
+fragment = File.readlines(fragment_path, chomp: true).map do |line|
+  line.gsub("${DOTFILES_ROOT}", root)
+end
+
+section_header = ->(line) { line.match?(/\A\s*\[[^\]]+\]\s*(?:#.*)?\z/) }
+
+find_section = lambda do |name|
+  header = /\A\s*\[#{Regexp.escape(name)}\]\s*(?:#.*)?\z/
+  start = lines.index { |line| line.match?(header) }
+  return nil unless start
+
+  finish = ((start + 1)...lines.length).find { |i| section_header.call(lines[i]) } || lines.length
+  [start, finish]
+end
+
+set_top_level = lambda do |key, value|
+  finish = lines.index { |line| section_header.call(line) } || lines.length
+  index = (0...finish).find { |i| lines[i].match?(/\A\s*#{Regexp.escape(key)}\s*=/) }
+  replacement = "#{key} = #{value}"
+
+  if index
+    lines[index] = replacement
+  else
+    insert_at = finish
+    insert_at -= 1 if insert_at.positive? && lines[insert_at - 1].empty?
+    lines.insert(insert_at, replacement)
+  end
+end
+
+set_section_key = lambda do |section, key, value|
+  range = find_section.call(section)
+
+  unless range
+    lines << "" unless lines.empty? || lines[-1].empty?
+    lines << "[#{section}]"
+    lines << "#{key} = #{value}"
+    return
+  end
+
+  start, finish = range
+  index = ((start + 1)...finish).find { |i| lines[i].match?(/\A\s*#{Regexp.escape(key)}\s*=/) }
+
+  if index
+    lines[index] = "#{key} = #{value}"
+  else
+    lines.insert(finish, "#{key} = #{value}")
+  end
+end
+
+current_section = nil
+
+fragment.each do |line|
+  stripped = line.strip
+  next if stripped.empty? || stripped.start_with?("#")
+
+  if (match = stripped.match(/\A\[([^\]]+)\]\z/))
+    current_section = match[1]
+    next
+  end
+
+  key, value = stripped.split("=", 2).map(&:strip)
+  if current_section
+    set_section_key.call(current_section, key, value)
+  else
+    set_top_level.call(key, value)
+  end
+end
+
+FileUtils.mkdir_p(File.dirname(config_path))
+File.write(config_path, "#{lines.join("\n")}\n")

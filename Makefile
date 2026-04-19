@@ -9,7 +9,8 @@ endif
 ROOT := $(CURDIR)
 CONFIG_DIR := $(ROOT)/config
 GHOSTTY_CONFIG_SOURCE := $(CONFIG_DIR)/ghostty
-CONFIG_FILES := $(filter-out $(GHOSTTY_CONFIG_SOURCE),$(wildcard $(CONFIG_DIR)/*))
+CODEX_NOTIFICATION_CONFIG := $(CONFIG_DIR)/codex-notifications.toml
+CONFIG_FILES := $(filter-out $(GHOSTTY_CONFIG_SOURCE) $(CODEX_NOTIFICATION_CONFIG),$(wildcard $(CONFIG_DIR)/*))
 CONFIG_LINKS := $(patsubst $(CONFIG_DIR)/%,$(HOME)/.%,$(CONFIG_FILES))
 GHOSTTY_CONFIG_LINK := $(HOME)/.config/ghostty/config
 
@@ -76,6 +77,7 @@ $(VIM_PLUGS):
 	@curl --silent --create-dirs -fLo $@ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
 sync: $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions to the current machine
+	@$(ROOT)/scripts/sync-codex-config
 	@tool_versions_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_tool_versions!')"; \
 		ln -sfn "$$tool_versions_file" "$(HOME)/.tool-versions"
 	@$(ENSURE_BREW)

@@ -17,6 +17,11 @@ Homebrew-installed bash after `brew bundle install` completes
 (`/opt/homebrew/bin/bash` on Apple Silicon), using `sudo` when a shell change
 is needed.
 
+`make sync` also patches the local `~/.codex/config.toml` with only the
+repo-managed notification keys. It does not own or store the full Codex config,
+so machine-local project trust, model, plugin, and marketplace settings stay in
+that local file.
+
 ## Update
 ```bash
 make update
