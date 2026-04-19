@@ -3,78 +3,106 @@
 
 require "fileutils"
 
+mode = ARGV.first == "--remove" ? :remove : :apply
 root = File.expand_path("..", __dir__)
 config_path = File.expand_path("~/.codex/config.toml")
-fragment_path = File.join(root, "config", "codex-notifications.toml")
+fragment_path = File.join(root, "app-config", "codex-notifications.toml")
 
-lines = File.exist?(config_path) ? File.readlines(config_path, chomp: true) : []
-fragment = File.readlines(fragment_path, chomp: true).map do |line|
-  line.gsub("${DOTFILES_ROOT}", root)
+def section_header?(line)
+  line.match?(/\A\s*\[[^\]]+\]\s*(?:#.*)?\z/)
 end
 
-section_header = ->(line) { line.match?(/\A\s*\[[^\]]+\]\s*(?:#.*)?\z/) }
-
-find_section = lambda do |name|
-  header = /\A\s*\[#{Regexp.escape(name)}\]\s*(?:#.*)?\z/
-  start = lines.index { |line| line.match?(header) }
-  return nil unless start
-
-  finish = ((start + 1)...lines.length).find { |i| section_header.call(lines[i]) } || lines.length
-  [start, finish]
-end
-
-set_top_level = lambda do |key, value|
-  finish = lines.index { |line| section_header.call(line) } || lines.length
-  index = (0...finish).find { |i| lines[i].match?(/\A\s*#{Regexp.escape(key)}\s*=/) }
-  replacement = "#{key} = #{value}"
-
-  if index
-    lines[index] = replacement
+def section_bounds(lines, section)
+  if section.nil?
+    [0, lines.index { |line| section_header?(line) } || lines.length]
   else
-    insert_at = finish
-    insert_at -= 1 if insert_at.positive? && lines[insert_at - 1].empty?
-    lines.insert(insert_at, replacement)
+    header = /\A\s*\[#{Regexp.escape(section)}\]\s*(?:#.*)?\z/
+    start = lines.index { |line| line.match?(header) }
+    return nil unless start
+
+    finish = ((start + 1)...lines.length).find { |i| section_header?(lines[i]) } || lines.length
+    [start + 1, finish, start]
   end
 end
 
-set_section_key = lambda do |section, key, value|
-  range = find_section.call(section)
+def parse_entries(path, root)
+  section = nil
 
-  unless range
+  File.readlines(path, chomp: true).each_with_object([]) do |line, entries|
+    line = line.gsub("${DOTFILES_ROOT}", root).strip
+    next if line.empty? || line.start_with?("#")
+
+    if (match = line.match(/\A\[([^\]]+)\]\z/))
+      section = match[1]
+      next
+    end
+
+    key, value = line.split("=", 2).map(&:strip)
+    entries << [section, key, value]
+  end
+end
+
+def key_index(lines, range_start, range_end, key)
+  (range_start...range_end).find { |i| lines[i].match?(/\A\s*#{Regexp.escape(key)}\s*=/) }
+end
+
+def set_key(lines, section, key, value)
+  bounds = section_bounds(lines, section)
+
+  unless bounds
     lines << "" unless lines.empty? || lines[-1].empty?
     lines << "[#{section}]"
     lines << "#{key} = #{value}"
     return
   end
 
-  start, finish = range
-  index = ((start + 1)...finish).find { |i| lines[i].match?(/\A\s*#{Regexp.escape(key)}\s*=/) }
+  range_start, range_end = bounds
+  index = key_index(lines, range_start, range_end, key)
+  replacement = "#{key} = #{value}"
 
   if index
-    lines[index] = "#{key} = #{value}"
+    lines[index] = replacement
   else
-    lines.insert(finish, "#{key} = #{value}")
+    insert_at = range_end
+    insert_at -= 1 if insert_at.positive? && lines[insert_at - 1].empty?
+    lines.insert(insert_at, replacement)
   end
 end
 
-current_section = nil
+def remove_key(lines, section, key, value)
+  bounds = section_bounds(lines, section)
+  return unless bounds
 
-fragment.each do |line|
-  stripped = line.strip
-  next if stripped.empty? || stripped.start_with?("#")
+  range_start, range_end, header_index = bounds
+  index = key_index(lines, range_start, range_end, key)
+  return unless index
+  return unless lines[index].split("=", 2).last&.strip == value
 
-  if (match = stripped.match(/\A\[([^\]]+)\]\z/))
-    current_section = match[1]
-    next
-  end
+  lines.delete_at(index)
 
-  key, value = stripped.split("=", 2).map(&:strip)
-  if current_section
-    set_section_key.call(current_section, key, value)
-  else
-    set_top_level.call(key, value)
-  end
+  return unless header_index
+
+  bounds = section_bounds(lines, section)
+  return unless bounds
+
+  range_start, range_end, header_index = bounds
+  empty_section = lines[range_start...range_end].all? { |line| line.strip.empty? }
+  lines.slice!(header_index...range_end) if empty_section
 end
 
-FileUtils.mkdir_p(File.dirname(config_path))
-File.write(config_path, "#{lines.join("\n")}\n")
+entries = parse_entries(fragment_path, root)
+
+if mode == :remove
+  exit 0 unless File.exist?(config_path)
+
+  lines = File.readlines(config_path, chomp: true)
+  entries.each { |section, key, value| remove_key(lines, section, key, value) }
+  lines.shift while lines.first&.strip == ""
+  lines.pop while lines.last&.strip == ""
+else
+  lines = File.exist?(config_path) ? File.readlines(config_path, chomp: true) : []
+  entries.each { |section, key, value| set_key(lines, section, key, value) }
+  FileUtils.mkdir_p(File.dirname(config_path))
+end
+
+File.write(config_path, lines.empty? ? "" : "#{lines.join("\n")}\n")

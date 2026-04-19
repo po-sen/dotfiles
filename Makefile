@@ -7,11 +7,11 @@ HOMEBREW_PREFIX ?= /usr/local
 endif
 
 ROOT := $(CURDIR)
-CONFIG_DIR := $(ROOT)/config
-GHOSTTY_CONFIG_SOURCE := $(CONFIG_DIR)/ghostty
-CODEX_NOTIFICATION_CONFIG := $(CONFIG_DIR)/codex-notifications.toml
-CONFIG_FILES := $(filter-out $(GHOSTTY_CONFIG_SOURCE) $(CODEX_NOTIFICATION_CONFIG),$(wildcard $(CONFIG_DIR)/*))
-CONFIG_LINKS := $(patsubst $(CONFIG_DIR)/%,$(HOME)/.%,$(CONFIG_FILES))
+HOME_DIR := $(ROOT)/home
+APP_CONFIG_DIR := $(ROOT)/app-config
+GHOSTTY_CONFIG_SOURCE := $(APP_CONFIG_DIR)/ghostty
+HOME_FILES := $(wildcard $(HOME_DIR)/*)
+HOME_LINKS := $(patsubst $(HOME_DIR)/%,$(HOME)/.%,$(HOME_FILES))
 GHOSTTY_CONFIG_LINK := $(HOME)/.config/ghostty/config
 
 BREW := $(HOMEBREW_PREFIX)/bin/brew
@@ -21,7 +21,7 @@ ASDF := $(HOMEBREW_PREFIX)/bin/asdf
 BREW_BUNDLE_FLAGS ?= --force --cleanup
 BREW_DUMP_FLAGS ?= --force --brews --casks --taps --vscode
 
-DOTFILES := $(CONFIG_LINKS) $(GHOSTTY_CONFIG_LINK) $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim
+DOTFILES := $(HOME_LINKS) $(GHOSTTY_CONFIG_LINK) $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim
 VIM_PLUGS := $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
 
 .DEFAULT_GOAL := help
@@ -62,7 +62,7 @@ endef
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "; print "Available targets:"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-$(HOME)/.%: $(CONFIG_DIR)/%
+$(HOME)/.%: $(HOME_DIR)/%
 	@ln -sf $< $@
 
 $(GHOSTTY_CONFIG_LINK): $(GHOSTTY_CONFIG_SOURCE)
@@ -100,7 +100,8 @@ update: ## Write installed Homebrew packages back to this device's Brewfile
 	$(BREW) bundle dump --file="$$device_file" $(BREW_DUMP_FLAGS)
 
 teardown: ## Remove repo-managed dotfiles plus Vim and asdf state
-	@for file in $(CONFIG_FILES); do \
+	@$(ROOT)/scripts/sync-codex-config --remove
+	@for file in $(HOME_FILES); do \
 		rm -f "$(HOME)/.$$(basename "$$file")"; \
 	done
 	@rm -f "$(GHOSTTY_CONFIG_LINK)"
