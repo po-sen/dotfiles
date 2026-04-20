@@ -16,3 +16,9 @@
 [user]
 	email = posen2101024@gmail.com
 	name = Posen
+[includeIf "hasconfig:remote.*.url:git@github.com:futurenestit/**"]
+	path = ~/.gitconfig.futurenestit
+[includeIf "hasconfig:remote.*.url:ssh://git@github.com/futurenestit/**"]
+	path = ~/.gitconfig.futurenestit
+[includeIf "hasconfig:remote.*.url:https://github.com/futurenestit/**"]
+	path = ~/.gitconfig.futurenestit

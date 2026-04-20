@@ -1,0 +1,5 @@
+[core]
+	sshCommand = ssh -i ~/.ssh/id_ed25519.futurenestit -o IdentitiesOnly=yes
+[user]
+	email = posen.futurenest@gmail.com
+	name = Posen
