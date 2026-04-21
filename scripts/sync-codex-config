@@ -161,6 +161,7 @@ if mode == :remove
   end
 else
   lines = File.exist?(config_path) ? File.readlines(config_path, chomp: true) : []
+  remove_key(lines, "tui", "terminal_title", '["current-dir", "session-id"]')
   entries.each { |section, key, value| set_key(lines, section, key, value) }
   FileUtils.mkdir_p(File.dirname(config_path))
 
