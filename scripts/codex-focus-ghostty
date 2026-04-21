@@ -14,7 +14,6 @@ ghostty_bundle_id="${CODEX_NOTIFY_GHOSTTY_BUNDLE_ID:-com.mitchellh.ghostty}"
 click_log_file="${CODEX_NOTIFY_CLICK_LOG_FILE:-$HOME/.codex/codex-notify-click.log}"
 session_map_file="${CODEX_NOTIFY_GHOSTTY_SESSION_MAP:-$HOME/.codex/logs/codex-ghostty-sessions.tsv}"
 resolved_project_path=""
-project_name=""
 result=""
 
 if [ -n "$project_path" ] && [ -d "$project_path" ]; then
@@ -22,23 +21,21 @@ if [ -n "$project_path" ] && [ -d "$project_path" ]; then
         cd "$project_path" >/dev/null 2>&1 && pwd -P
     )"
 fi
-if [ -n "$project_path" ]; then
-    project_name="$(basename "$project_path")"
-fi
 
 if [ ! -x /usr/bin/osascript ]; then
     exit 0
 fi
 
-path_matches_project() {
+sanitize_field() {
+    printf '%s' "$1" | tr '\011\012\015' '   '
+}
+
+terminal_matches_project() {
     local terminal_path="$1"
-    local project_prefix=""
-    local resolved_prefix=""
 
-    if [ -z "$terminal_path" ]; then
-        return 1
+    if [ -z "$project_path" ] && [ -z "$resolved_project_path" ]; then
+        return 0
     fi
-
     if [ -n "$project_path" ] && [ "$terminal_path" = "$project_path" ]; then
         return 0
     fi
@@ -46,33 +43,7 @@ path_matches_project() {
         return 0
     fi
 
-    if [ -n "$project_path" ]; then
-        project_prefix="$project_path"
-        case "$project_prefix" in
-            */) ;;
-            *) project_prefix="$project_prefix/" ;;
-        esac
-        case "$terminal_path" in
-            "$project_prefix"*) return 0 ;;
-        esac
-    fi
-
-    if [ -n "$resolved_project_path" ]; then
-        resolved_prefix="$resolved_project_path"
-        case "$resolved_prefix" in
-            */) ;;
-            *) resolved_prefix="$resolved_prefix/" ;;
-        esac
-        case "$terminal_path" in
-            "$resolved_prefix"*) return 0 ;;
-        esac
-    fi
-
     return 1
-}
-
-sanitize_field() {
-    printf '%s' "$1" | tr '\011\012\015' '   '
 }
 
 if [ "$mode" = "register" ]; then
@@ -100,7 +71,7 @@ APPLESCRIPT
     if [ -z "${terminal_id:-}" ]; then
         exit 0
     fi
-    if ! path_matches_project "${terminal_working_directory:-}"; then
+    if ! terminal_matches_project "${terminal_working_directory:-}"; then
         exit 0
     fi
 
@@ -125,71 +96,44 @@ if [ -n "$session_id" ] && [ -r "$session_map_file" ]; then
 fi
 
 result="$(
-    /usr/bin/osascript - "$ghostty_bundle_id" "$project_path" "$resolved_project_path" "$project_name" "$session_id" "$mapped_terminal_id" <<'APPLESCRIPT' 2>/dev/null
+    /usr/bin/osascript - "$ghostty_bundle_id" "$session_id" "$mapped_terminal_id" <<'APPLESCRIPT' 2>/dev/null
 on run argv
     set ghosttyBundleID to item 1 of argv
-    set projectPath to ""
-    set resolvedProjectPath to ""
-    set projectName to ""
     set sessionId to ""
     set mappedTerminalId to ""
-    set directoryPrefix to ""
-    set resolvedDirectoryPrefix to ""
-    set terminalWorkingDirectory to ""
     set terminalName to ""
     set terminalId to ""
+    set terminalWorkingDirectory to ""
 
     if (count of argv) > 1 then
-        set projectPath to item 2 of argv
+        set sessionId to item 2 of argv
     end if
     if (count of argv) > 2 then
-        set resolvedProjectPath to item 3 of argv
-    end if
-    if (count of argv) > 3 then
-        set projectName to item 4 of argv
-    end if
-    if (count of argv) > 4 then
-        set sessionId to item 5 of argv
-    end if
-    if (count of argv) > 5 then
-        set mappedTerminalId to item 6 of argv
-    end if
-
-    if projectPath is not "" then
-        set directoryPrefix to projectPath
-        if directoryPrefix does not end with "/" then
-            set directoryPrefix to directoryPrefix & "/"
-        end if
-    end if
-    if resolvedProjectPath is not "" then
-        set resolvedDirectoryPrefix to resolvedProjectPath
-        if resolvedDirectoryPrefix does not end with "/" then
-            set resolvedDirectoryPrefix to resolvedDirectoryPrefix & "/"
-        end if
+        set mappedTerminalId to item 3 of argv
     end if
 
     using terms from application "Ghostty"
         tell application id ghosttyBundleID
             activate
 
-            if projectPath is "" and sessionId is "" then
+            if sessionId is "" and mappedTerminalId is "" then
                 return "activated-only"
             end if
 
             repeat 12 times
                 repeat with terminalItem in every terminal
-                    set terminalWorkingDirectory to ""
                     set terminalName to ""
                     set terminalId to ""
+                    set terminalWorkingDirectory to ""
 
-                    try
-                        set terminalWorkingDirectory to working directory of terminalItem
-                    end try
                     try
                         set terminalName to name of terminalItem
                     end try
                     try
                         set terminalId to id of terminalItem
+                    end try
+                    try
+                        set terminalWorkingDirectory to working directory of terminalItem
                     end try
 
                     if mappedTerminalId is not "" and terminalId is mappedTerminalId then
@@ -198,68 +142,16 @@ on run argv
                     end if
                     if sessionId is not "" and terminalName contains sessionId then
                         focus terminalItem
-                        return "focused-session:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
-                    end if
-                end repeat
-
-                if sessionId is not "" then
-                    delay 0.15
-                end if
-            end repeat
-
-            if sessionId is not "" then
-                return "activated-no-session-match:" & sessionId
-            end if
-
-            repeat 12 times
-                repeat with terminalItem in every terminal
-                    set terminalWorkingDirectory to ""
-                    set terminalName to ""
-                    set terminalId to ""
-
-                    try
-                        set terminalWorkingDirectory to working directory of terminalItem
-                    end try
-                    try
-                        set terminalName to name of terminalItem
-                    end try
-                    try
-                        set terminalId to id of terminalItem
-                    end try
-
-                    if projectPath is not "" and terminalWorkingDirectory is projectPath then
-                        focus terminalItem
-                        return "focused-project:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
-                    end if
-                    if resolvedProjectPath is not "" and terminalWorkingDirectory is resolvedProjectPath then
-                        focus terminalItem
-                        return "focused-project:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
-                    end if
-                    if directoryPrefix is not "" and terminalWorkingDirectory starts with directoryPrefix then
-                        focus terminalItem
-                        return "focused-project:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
-                    end if
-                    if resolvedDirectoryPrefix is not "" and terminalWorkingDirectory starts with resolvedDirectoryPrefix then
-                        focus terminalItem
-                        return "focused-project:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
-                    end if
-                    if projectPath is not "" and terminalWorkingDirectory contains projectPath then
-                        focus terminalItem
-                        return "focused-project:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
-                    end if
-                    if resolvedProjectPath is not "" and terminalWorkingDirectory contains resolvedProjectPath then
-                        focus terminalItem
-                        return "focused-project:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
-                    end if
-                    if projectName is not "" and terminalName contains projectName then
-                        focus terminalItem
-                        return "focused-project:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
+                        return "focused-session-title:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
                     end if
                 end repeat
 
                 delay 0.15
             end repeat
 
+            if sessionId is not "" then
+                return "activated-no-session-match:" & sessionId
+            end if
             return "activated-no-match"
         end tell
     end using terms from

@@ -161,6 +161,7 @@ if mode == :remove
   end
 else
   lines = File.exist?(config_path) ? File.readlines(config_path, chomp: true) : []
+  remove_key(lines, nil, "notify", "[\"#{root}/scripts/codex-notify\", \"--native-handler\"]")
   remove_key(lines, "tui", "terminal_title", '["current-dir", "session-id"]')
   remove_key(lines, "tui", "notifications", '["agent-turn-complete"]')
   remove_key(lines, "tui", "notification_condition", '"always"')

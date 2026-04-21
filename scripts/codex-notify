@@ -64,13 +64,6 @@ escape_osascript_string() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-extract_json_field() {
-    local key="$1"
-    local payload="$2"
-
-    printf '%s\n' "$payload" | sed -n "s/.*\"$key\":\"\\([^\"]*\\)\".*/\\1/p"
-}
-
 json_get_string() {
     local payload="$1"
     local key="$2"
@@ -129,58 +122,6 @@ if data is not None:
 PY
 }
 
-notification_type_from_payload() {
-    local payload="$1"
-    local event_type=""
-
-    event_type="$(json_get_string "$payload" "type")"
-    if [ -z "$event_type" ]; then
-        event_type="$(json_get_string "$payload" "method")"
-    fi
-    if [ -z "$event_type" ]; then
-        event_type="$(json_get_string "$payload" "hook_event_name")"
-    fi
-    if [ -z "$event_type" ]; then
-        case "$payload" in
-            *'"type":"agent-turn-complete"'*)
-                event_type="agent-turn-complete"
-                ;;
-            *'"type":"approval-requested"'*)
-                event_type="approval-requested"
-                ;;
-            *'"type":"exec_approval_request"'*)
-                event_type="exec_approval_request"
-                ;;
-            *'"type":"apply_patch_approval_request"'*)
-                event_type="apply_patch_approval_request"
-                ;;
-            *'"type":"request_permissions"'*)
-                event_type="request_permissions"
-                ;;
-            *'"method":"item/commandExecution/requestApproval"'*)
-                event_type="item/commandExecution/requestApproval"
-                ;;
-            *'"method":"item/fileChange/requestApproval"'*)
-                event_type="item/fileChange/requestApproval"
-                ;;
-            *'"method":"item/permissions/requestApproval"'*)
-                event_type="item/permissions/requestApproval"
-                ;;
-            *'"hook_event_name":"PermissionRequest"'*)
-                event_type="PermissionRequest"
-                ;;
-            *'"hook_event_name":"SessionStart"'*)
-                event_type="SessionStart"
-                ;;
-            *'"hook_event_name":"Stop"'*)
-                event_type="Stop"
-                ;;
-        esac
-    fi
-
-    printf '%s\n' "$event_type"
-}
-
 project_name_from_path() {
     local project_path="$1"
 
@@ -196,12 +137,6 @@ project_path_from_payload() {
     local project_path=""
 
     project_path="$(json_find_string "$payload" "cwd" "working_directory")"
-    if [ -z "$project_path" ]; then
-        project_path="$(extract_json_field "cwd" "$payload")"
-    fi
-    if [ -z "$project_path" ]; then
-        project_path="$(extract_json_field "working_directory" "$payload")"
-    fi
 
     printf '%s\n' "$project_path"
 }
@@ -211,9 +146,6 @@ session_id_from_payload() {
     local session_id=""
 
     session_id="$(json_find_string "$payload" "session_id")"
-    if [ -z "$session_id" ]; then
-        session_id="$(json_find_string "$payload" "thread_id")"
-    fi
 
     printf '%s\n' "$session_id"
 }
@@ -529,44 +461,17 @@ register_ghostty_session() {
         "$helper" --register-session "$project_path" "$session_id" >/dev/null 2>&1 || true
 }
 
-handle_native_payload() {
-    local payload="${1:-}"
-    local event_type=""
+handle_permission_request_hook() {
+    local payload=""
     local project_path=""
     local session_id=""
     local detail=""
 
-    event_type="$(notification_type_from_payload "$payload")"
-    project_path="$(project_path_from_payload "$payload")"
-    if [ -z "$project_path" ]; then
-        project_path="${PWD:-}"
-    fi
-    session_id="$(session_id_from_payload "$payload")"
-
-    case "$event_type" in
-        agent-turn-complete)
-            detail="$(json_get_string "$payload" "last-assistant-message")"
-            notify_task_complete "$project_path" "$detail" "$session_id"
-            ;;
-        approval-requested|exec_approval_request|apply_patch_approval_request|request_permissions|item/commandExecution/requestApproval|item/fileChange/requestApproval|item/permissions/requestApproval|PermissionRequest)
-            detail="$(approval_detail_from_payload "$payload")"
-            notify_approval_requested "$project_path" "$detail" "$session_id"
-            ;;
-        SessionStart)
-            register_ghostty_session "$project_path" "$session_id"
-            ;;
-        Stop)
-            detail="$(json_get_string "$payload" "last_assistant_message")"
-            notify_task_complete "$project_path" "$detail" "$session_id"
-            ;;
-    esac
-}
-
-handle_permission_request_hook() {
-    local payload=""
-
     payload="$(cat)"
-    handle_native_payload "$payload"
+    project_path="$(project_path_from_payload "$payload")"
+    session_id="$(session_id_from_payload "$payload")"
+    detail="$(approval_detail_from_payload "$payload")"
+    notify_approval_requested "$project_path" "$detail" "$session_id"
 }
 
 handle_session_start_hook() {
@@ -582,16 +487,22 @@ handle_session_start_hook() {
 
 handle_stop_hook() {
     local payload=""
+    local project_path=""
+    local session_id=""
+    local detail=""
 
     payload="$(cat)"
-    handle_native_payload "$payload"
+    project_path="$(project_path_from_payload "$payload")"
+    session_id="$(session_id_from_payload "$payload")"
+    detail="$(json_get_string "$payload" "last_assistant_message")"
+    notify_task_complete "$project_path" "$detail" "$session_id"
 }
 
 handle_script_mode() {
     case "${1:-}" in
         --native-handler)
-            shift
-            handle_native_payload "${1:-}"
+            # Native turn-complete notifications do not include a reliable session id.
+            # Completion notifications are handled by the Stop hook instead.
             return 0
             ;;
         --session-start-hook)
