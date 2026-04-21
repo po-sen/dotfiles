@@ -23,6 +23,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${DOTFILES_ROOT}/scripts/codex-notify --stop-hook",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

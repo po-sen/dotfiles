@@ -172,6 +172,9 @@ notification_type_from_payload() {
             *'"hook_event_name":"SessionStart"'*)
                 event_type="SessionStart"
                 ;;
+            *'"hook_event_name":"Stop"'*)
+                event_type="Stop"
+                ;;
         esac
     fi
 
@@ -552,6 +555,10 @@ handle_native_payload() {
         SessionStart)
             register_ghostty_session "$project_path" "$session_id"
             ;;
+        Stop)
+            detail="$(json_get_string "$payload" "last_assistant_message")"
+            notify_task_complete "$project_path" "$detail" "$session_id"
+            ;;
     esac
 }
 
@@ -573,6 +580,13 @@ handle_session_start_hook() {
     register_ghostty_session "$project_path" "$session_id"
 }
 
+handle_stop_hook() {
+    local payload=""
+
+    payload="$(cat)"
+    handle_native_payload "$payload"
+}
+
 handle_script_mode() {
     case "${1:-}" in
         --native-handler)
@@ -582,6 +596,10 @@ handle_script_mode() {
             ;;
         --session-start-hook)
             handle_session_start_hook
+            return 0
+            ;;
+        --stop-hook)
+            handle_stop_hook
             return 0
             ;;
         --permission-request-hook)
