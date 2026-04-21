@@ -1,5 +1,9 @@
 notify = ["${DOTFILES_ROOT}/scripts/codex-notify", "--native-handler"]
+suppress_unstable_features_warning = true
 
 [tui]
-notifications = ["agent-turn-complete", "approval-requested"]
+notifications = ["agent-turn-complete"]
 notification_condition = "always"
+
+[features]
+codex_hooks = true

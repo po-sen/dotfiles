@@ -2,11 +2,14 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "json"
 
 mode = ARGV.first == "--remove" ? :remove : :apply
 root = File.expand_path("..", __dir__)
 config_path = File.expand_path("~/.codex/config.toml")
 fragment_path = File.join(root, "app-config", "codex-notifications.toml")
+hooks_fragment_path = File.join(root, "app-config", "codex-hooks.json")
+hooks_config_path = File.expand_path("~/.codex/hooks.json")
 
 def section_header?(line)
   line.match?(/\A\s*\[[^\]]+\]\s*(?:#.*)?\z/)
@@ -90,19 +93,81 @@ def remove_key(lines, section, key, value)
   lines.slice!(header_index...range_end) if empty_section
 end
 
+def read_json_template(path, root)
+  JSON.parse(File.read(path).gsub("${DOTFILES_ROOT}", root))
+end
+
+def read_json_file(path)
+  return {} unless File.exist?(path)
+
+  JSON.parse(File.read(path))
+end
+
+def write_json_file(path, data)
+  FileUtils.mkdir_p(File.dirname(path))
+  File.write(path, "#{JSON.pretty_generate(data)}\n")
+end
+
+def merge_hooks_config(existing, fragment)
+  existing["hooks"] = {} unless existing["hooks"].is_a?(Hash)
+
+  fragment.fetch("hooks", {}).each do |event_name, groups|
+    existing["hooks"][event_name] = [] unless existing["hooks"][event_name].is_a?(Array)
+    groups.each do |group|
+      existing["hooks"][event_name] << group unless existing["hooks"][event_name].any? { |item| item == group }
+    end
+  end
+
+  existing
+end
+
+def remove_hooks_config(existing, fragment)
+  hooks = existing["hooks"]
+  return existing unless hooks.is_a?(Hash)
+
+  fragment.fetch("hooks", {}).each do |event_name, groups|
+    next unless hooks[event_name].is_a?(Array)
+
+    hooks[event_name].reject! { |item| groups.any? { |group| item == group } }
+    hooks.delete(event_name) if hooks[event_name].empty?
+  end
+
+  existing.delete("hooks") if hooks.empty?
+  existing
+end
+
 entries = parse_entries(fragment_path, root)
+hooks_fragment = File.exist?(hooks_fragment_path) ? read_json_template(hooks_fragment_path, root) : {}
+write_config = true
 
 if mode == :remove
-  exit 0 unless File.exist?(config_path)
+  if File.exist?(config_path)
+    lines = File.readlines(config_path, chomp: true)
+    entries.each { |section, key, value| remove_key(lines, section, key, value) }
+    lines.shift while lines.first&.strip == ""
+    lines.pop while lines.last&.strip == ""
+  else
+    lines = []
+    write_config = false
+  end
 
-  lines = File.readlines(config_path, chomp: true)
-  entries.each { |section, key, value| remove_key(lines, section, key, value) }
-  lines.shift while lines.first&.strip == ""
-  lines.pop while lines.last&.strip == ""
+  if File.exist?(hooks_config_path) && !hooks_fragment.empty?
+    hooks_config = remove_hooks_config(read_json_file(hooks_config_path), hooks_fragment)
+    if hooks_config.empty?
+      FileUtils.rm_f(hooks_config_path)
+    else
+      write_json_file(hooks_config_path, hooks_config)
+    end
+  end
 else
   lines = File.exist?(config_path) ? File.readlines(config_path, chomp: true) : []
   entries.each { |section, key, value| set_key(lines, section, key, value) }
   FileUtils.mkdir_p(File.dirname(config_path))
+
+  unless hooks_fragment.empty?
+    hooks_config = merge_hooks_config(read_json_file(hooks_config_path), hooks_fragment)
+    write_json_file(hooks_config_path, hooks_config)
+  end
 end
 
-File.write(config_path, lines.empty? ? "" : "#{lines.join("\n")}\n")
+File.write(config_path, lines.empty? ? "" : "#{lines.join("\n")}\n") if write_config

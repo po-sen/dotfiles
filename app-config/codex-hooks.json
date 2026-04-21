@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${DOTFILES_ROOT}/scripts/codex-notify --permission-request-hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

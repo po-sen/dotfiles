@@ -15,6 +15,7 @@ fi
 
 CODEX_BIN="${CODEX_NOTIFY_CODEX_BIN:-}"
 CODEX_NOTIFY_SOUND="${CODEX_NOTIFY_SOUND:-/System/Library/Sounds/Funk.aiff}"
+CODEX_NOTIFY_APPROVAL_SOUND="${CODEX_NOTIFY_APPROVAL_SOUND:-/System/Library/Sounds/Sosumi.aiff}"
 CODEX_NOTIFY_POPUP="${CODEX_NOTIFY_POPUP:-1}"
 CODEX_NOTIFY_LOG_FILE="${CODEX_NOTIFY_LOG_FILE:-$HOME/.codex/logs/codex-notify.log}"
 CODEX_NOTIFY_TITLE="${CODEX_NOTIFY_TITLE:-Codex}"
@@ -136,12 +137,24 @@ notification_type_from_payload() {
         event_type="$(json_get_string "$payload" "method")"
     fi
     if [ -z "$event_type" ]; then
+        event_type="$(json_get_string "$payload" "hook_event_name")"
+    fi
+    if [ -z "$event_type" ]; then
         case "$payload" in
             *'"type":"agent-turn-complete"'*)
                 event_type="agent-turn-complete"
                 ;;
             *'"type":"approval-requested"'*)
                 event_type="approval-requested"
+                ;;
+            *'"type":"exec_approval_request"'*)
+                event_type="exec_approval_request"
+                ;;
+            *'"type":"apply_patch_approval_request"'*)
+                event_type="apply_patch_approval_request"
+                ;;
+            *'"type":"request_permissions"'*)
+                event_type="request_permissions"
                 ;;
             *'"method":"item/commandExecution/requestApproval"'*)
                 event_type="item/commandExecution/requestApproval"
@@ -151,6 +164,9 @@ notification_type_from_payload() {
                 ;;
             *'"method":"item/permissions/requestApproval"'*)
                 event_type="item/permissions/requestApproval"
+                ;;
+            *'"hook_event_name":"PermissionRequest"'*)
+                event_type="PermissionRequest"
                 ;;
         esac
     fi
@@ -219,11 +235,11 @@ if data is None:
 
 parts = []
 
-reason = first_string(data, ["reason", "message", "description", "prompt"])
+reason = first_string(data, ["reason", "message", "description", "prompt", "justification"])
 if reason:
     parts.append(reason)
 
-command = first_string(data, ["command"])
+command = first_string(data, ["command", "program"])
 if command:
     parts.append(f"Command: {command}")
 
@@ -242,7 +258,7 @@ grant_root = first_string(data, ["grantRoot"])
 if grant_root:
     parts.append(f"Path: {grant_root}")
 
-tool_name = first_string(data, ["tool_name", "toolName"])
+tool_name = first_string(data, ["tool_name", "toolName", "tool_title", "toolTitle"])
 if tool_name and not command:
     parts.append(f"Tool: {tool_name}")
 
@@ -270,8 +286,10 @@ log_notification() {
     log_message="$(printf '%s' "$message" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
 
     if [ -n "$CODEX_NOTIFY_LOG_FILE" ]; then
-        mkdir -p "$(dirname "$CODEX_NOTIFY_LOG_FILE")"
-        printf '%s\t%s\t%s\n' "$kind" "$(date '+%Y-%m-%d %H:%M:%S')" "$log_message" >> "$CODEX_NOTIFY_LOG_FILE"
+        mkdir -p "$(dirname "$CODEX_NOTIFY_LOG_FILE")" 2>/dev/null || true
+        {
+            printf '%s\t%s\t%s\n' "$kind" "$(date '+%Y-%m-%d %H:%M:%S')" "$log_message" >> "$CODEX_NOTIFY_LOG_FILE"
+        } 2>/dev/null || true
     fi
 }
 
@@ -348,7 +366,7 @@ show_popup() {
         if [ -n "$click_command" ]; then
             notifier_args+=(-execute "$click_command")
         fi
-        "$terminal_notifier" "${notifier_args[@]}" >/dev/null 2>&1 &
+        "$terminal_notifier" "${notifier_args[@]}" >/dev/null 2>&1 || true
         return 0
     fi
 
@@ -472,7 +490,7 @@ notify_task_complete() {
 }
 
 notify_approval_requested() {
-    notify_with_project "approval_requested" "$CODEX_NOTIFY_SOUND" "needs approval" "Review the pending approval in Codex." "${1:-}" "${2:-}"
+    notify_with_project "approval_requested" "$CODEX_NOTIFY_APPROVAL_SOUND" "needs approval" "Review the pending approval in Codex." "${1:-}" "${2:-}"
 }
 
 handle_native_payload() {
@@ -492,11 +510,18 @@ handle_native_payload() {
             detail="$(json_get_string "$payload" "last-assistant-message")"
             notify_task_complete "$project_path" "$detail"
             ;;
-        approval-requested|item/commandExecution/requestApproval|item/fileChange/requestApproval|item/permissions/requestApproval)
+        approval-requested|exec_approval_request|apply_patch_approval_request|request_permissions|item/commandExecution/requestApproval|item/fileChange/requestApproval|item/permissions/requestApproval|PermissionRequest)
             detail="$(approval_detail_from_payload "$payload")"
             notify_approval_requested "$project_path" "$detail"
             ;;
     esac
+}
+
+handle_permission_request_hook() {
+    local payload=""
+
+    payload="$(cat)"
+    handle_native_payload "$payload"
 }
 
 handle_script_mode() {
@@ -504,6 +529,10 @@ handle_script_mode() {
         --native-handler)
             shift
             handle_native_payload "${1:-}"
+            return 0
+            ;;
+        --permission-request-hook)
+            handle_permission_request_hook
             return 0
             ;;
         *)
