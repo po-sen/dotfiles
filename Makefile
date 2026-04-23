@@ -78,6 +78,7 @@ $(VIM_PLUGS):
 
 sync: $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions to the current machine
 	@$(ROOT)/scripts/sync-codex-config
+	@$(ROOT)/scripts/sync-claude-config
 	@tool_versions_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_tool_versions!')"; \
 		ln -sfn "$$tool_versions_file" "$(HOME)/.tool-versions"
 	@$(ENSURE_BREW)
@@ -101,6 +102,7 @@ update: ## Write installed Homebrew packages back to this device's Brewfile
 
 teardown: ## Remove repo-managed dotfiles plus Vim and asdf state
 	@$(ROOT)/scripts/sync-codex-config --remove
+	@$(ROOT)/scripts/sync-claude-config --remove
 	@for file in $(HOME_FILES); do \
 		rm -f "$(HOME)/.$$(basename "$$file")"; \
 	done

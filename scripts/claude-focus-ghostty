@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+mode="focus"
+if [ "${1:-}" = "--register-session" ]; then
+    mode="register"
+    shift
+fi
+
+project_path="${1:-}"
+session_id="${2:-}"
+ghostty_bundle_id="${CLAUDE_NOTIFY_GHOSTTY_BUNDLE_ID:-com.mitchellh.ghostty}"
+click_log_file="${CLAUDE_NOTIFY_CLICK_LOG_FILE:-$HOME/.claude/claude-notify-click.log}"
+session_map_file="${CLAUDE_NOTIFY_GHOSTTY_SESSION_MAP:-$HOME/.claude/logs/claude-ghostty-sessions.tsv}"
+resolved_project_path=""
+result=""
+
+if [ -n "$project_path" ] && [ -d "$project_path" ]; then
+    resolved_project_path="$(
+        cd "$project_path" >/dev/null 2>&1 && pwd -P
+    )"
+fi
+
+if [ ! -x /usr/bin/osascript ]; then
+    exit 0
+fi
+
+sanitize_field() {
+    printf '%s' "$1" | tr '\011\012\015' '   '
+}
+
+terminal_matches_project() {
+    local terminal_path="$1"
+
+    if [ -z "$project_path" ] && [ -z "$resolved_project_path" ]; then
+        return 0
+    fi
+    if [ -n "$project_path" ] && [ "$terminal_path" = "$project_path" ]; then
+        return 0
+    fi
+    if [ -n "$resolved_project_path" ] && [ "$terminal_path" = "$resolved_project_path" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+if [ "$mode" = "register" ]; then
+    if [ -z "$session_id" ]; then
+        exit 0
+    fi
+
+    registration="$(
+        /usr/bin/osascript - "$ghostty_bundle_id" <<'APPLESCRIPT' 2>/dev/null
+on run argv
+    set ghosttyBundleID to item 1 of argv
+    set separator to ASCII character 9
+
+    using terms from application "Ghostty"
+        tell application id ghosttyBundleID
+            set terminalItem to focused terminal of selected tab of front window
+            return (id of terminalItem) & separator & (working directory of terminalItem) & separator & (name of terminalItem)
+        end tell
+    end using terms from
+end run
+APPLESCRIPT
+    )" || exit 0
+
+    IFS=$'\t' read -r terminal_id terminal_working_directory terminal_name <<< "$registration"
+    if [ -z "${terminal_id:-}" ]; then
+        exit 0
+    fi
+    if ! terminal_matches_project "${terminal_working_directory:-}"; then
+        exit 0
+    fi
+
+    if [ -n "$session_map_file" ]; then
+        mkdir -p "$(dirname "$session_map_file")" 2>/dev/null || true
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$(date '+%Y-%m-%d %H:%M:%S')" \
+            "$(sanitize_field "$session_id")" \
+            "$(sanitize_field "$terminal_id")" \
+            "$(sanitize_field "$project_path")" \
+            "$(sanitize_field "${terminal_working_directory:-}")" \
+            "$(sanitize_field "${terminal_name:-}")" >> "$session_map_file" 2>/dev/null || true
+    fi
+    exit 0
+fi
+
+mapped_terminal_id=""
+if [ -n "$session_id" ] && [ -r "$session_map_file" ]; then
+    mapped_terminal_id="$(
+        awk -F '\t' -v session_id="$session_id" '$2 == session_id && $3 != "" { found = $3 } END { print found }' "$session_map_file"
+    )"
+fi
+
+result="$(
+    /usr/bin/osascript - "$ghostty_bundle_id" "$session_id" "$mapped_terminal_id" <<'APPLESCRIPT' 2>/dev/null
+on run argv
+    set ghosttyBundleID to item 1 of argv
+    set sessionId to ""
+    set mappedTerminalId to ""
+    set terminalName to ""
+    set terminalId to ""
+    set terminalWorkingDirectory to ""
+
+    if (count of argv) > 1 then
+        set sessionId to item 2 of argv
+    end if
+    if (count of argv) > 2 then
+        set mappedTerminalId to item 3 of argv
+    end if
+
+    using terms from application "Ghostty"
+        tell application id ghosttyBundleID
+            activate
+
+            if sessionId is "" and mappedTerminalId is "" then
+                return "activated-only"
+            end if
+
+            repeat 12 times
+                repeat with terminalItem in every terminal
+                    set terminalName to ""
+                    set terminalId to ""
+                    set terminalWorkingDirectory to ""
+
+                    try
+                        set terminalName to name of terminalItem
+                    end try
+                    try
+                        set terminalId to id of terminalItem
+                    end try
+                    try
+                        set terminalWorkingDirectory to working directory of terminalItem
+                    end try
+
+                    if mappedTerminalId is not "" and terminalId is mappedTerminalId then
+                        focus terminalItem
+                        return "focused-session-id:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
+                    end if
+                    if sessionId is not "" and terminalName contains sessionId then
+                        focus terminalItem
+                        return "focused-session-title:" & terminalId & ":" & terminalWorkingDirectory & ":" & terminalName
+                    end if
+                end repeat
+
+                delay 0.15
+            end repeat
+
+            if sessionId is not "" then
+                return "activated-no-session-match:" & sessionId
+            end if
+            return "activated-no-match"
+        end tell
+    end using terms from
+end run
+APPLESCRIPT
+)" || result="osascript-error"
+
+if [ -n "$click_log_file" ]; then
+    mkdir -p "$(dirname "$click_log_file")" 2>/dev/null || true
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$(date '+%Y-%m-%d %H:%M:%S')" \
+        "${project_path:-<empty>}" \
+        "${resolved_project_path:-<empty>}" \
+        "${session_id:-<empty>}" \
+        "${mapped_terminal_id:-<empty>}" \
+        "${result:-<empty>}" >> "$click_log_file" 2>/dev/null || true
+fi

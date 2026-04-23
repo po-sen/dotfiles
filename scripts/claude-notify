@@ -1,0 +1,554 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(
+    cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P
+)"
+
+if [ -z "${HOME:-}" ]; then
+    HOME="$(
+        cd ~ >/dev/null 2>&1 && pwd -P
+    )"
+    export HOME
+fi
+
+CLAUDE_NOTIFY_SOUND="${CLAUDE_NOTIFY_SOUND:-/System/Library/Sounds/Funk.aiff}"
+CLAUDE_NOTIFY_APPROVAL_SOUND="${CLAUDE_NOTIFY_APPROVAL_SOUND:-/System/Library/Sounds/Sosumi.aiff}"
+CLAUDE_NOTIFY_POPUP="${CLAUDE_NOTIFY_POPUP:-1}"
+CLAUDE_NOTIFY_LOG_FILE="${CLAUDE_NOTIFY_LOG_FILE:-$HOME/.claude/logs/claude-notify.log}"
+CLAUDE_NOTIFY_TITLE="${CLAUDE_NOTIFY_TITLE:-Claude}"
+CLAUDE_NOTIFY_TERMINAL_NOTIFIER="${CLAUDE_NOTIFY_TERMINAL_NOTIFIER:-}"
+CLAUDE_NOTIFY_CLICK_HANDLER="${CLAUDE_NOTIFY_CLICK_HANDLER:-$script_dir/claude-focus-ghostty}"
+CLAUDE_NOTIFY_GHOSTTY_SESSION_MAP="${CLAUDE_NOTIFY_GHOSTTY_SESSION_MAP:-$HOME/.claude/logs/claude-ghostty-sessions.tsv}"
+CLAUDE_NOTIFY_GHOSTTY_BUNDLE_ID="${CLAUDE_NOTIFY_GHOSTTY_BUNDLE_ID:-com.mitchellh.ghostty}"
+CLAUDE_NOTIFY_MESSAGE_MAX_CHARS="${CLAUDE_NOTIFY_MESSAGE_MAX_CHARS:-90}"
+CLAUDE_NOTIFY_PYTHON_BIN="${CLAUDE_NOTIFY_PYTHON_BIN:-/usr/bin/python3}"
+
+resolve_terminal_notifier() {
+    local candidate=""
+
+    for candidate in \
+        "$CLAUDE_NOTIFY_TERMINAL_NOTIFIER" \
+        /opt/homebrew/bin/terminal-notifier \
+        /usr/local/bin/terminal-notifier \
+        "$(command -v terminal-notifier 2>/dev/null || true)"; do
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+escape_osascript_string() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+json_get_string() {
+    local payload="$1"
+    local key="$2"
+
+    "$CLAUDE_NOTIFY_PYTHON_BIN" - "$payload" "$key" <<'PY'
+import json
+import sys
+
+payload = sys.argv[1]
+key = sys.argv[2]
+
+try:
+    value = json.loads(payload).get(key, "")
+except Exception:
+    value = ""
+
+if isinstance(value, str):
+    sys.stdout.write(value)
+PY
+}
+
+json_find_string() {
+    local payload="$1"
+    shift
+
+    "$CLAUDE_NOTIFY_PYTHON_BIN" - "$payload" "$@" <<'PY'
+import json
+import sys
+
+payload = sys.argv[1]
+keys = sys.argv[2:]
+
+try:
+    data = json.loads(payload)
+except Exception:
+    data = None
+
+def walk(value):
+    if isinstance(value, dict):
+        for key in keys:
+            item = value.get(key)
+            if isinstance(item, str) and item.strip():
+                sys.stdout.write(item)
+                return True
+        for item in value.values():
+            if walk(item):
+                return True
+    elif isinstance(value, list):
+        for item in value:
+            if walk(item):
+                return True
+    return False
+
+if data is not None:
+    walk(data)
+PY
+}
+
+project_name_from_path() {
+    local project_path="$1"
+
+    if [ -z "$project_path" ] || [ "$project_path" = "/" ] || [ "$project_path" = "." ]; then
+        return 0
+    fi
+
+    basename "$project_path"
+}
+
+project_path_from_payload() {
+    local payload="$1"
+    local project_path=""
+
+    project_path="$(json_find_string "$payload" "cwd" "working_directory")"
+
+    printf '%s\n' "$project_path"
+}
+
+session_id_from_payload() {
+    local payload="$1"
+    local session_id=""
+
+    session_id="$(json_find_string "$payload" "session_id")"
+
+    printf '%s\n' "$session_id"
+}
+
+approval_detail_from_payload() {
+    local payload="$1"
+
+    "$CLAUDE_NOTIFY_PYTHON_BIN" - "$payload" <<'PY'
+import json
+import sys
+
+payload = sys.argv[1]
+
+try:
+    data = json.loads(payload)
+except Exception:
+    data = None
+
+def first_string(value, keys):
+    if isinstance(value, dict):
+        for key in keys:
+            item = value.get(key)
+            if isinstance(item, str) and item.strip():
+                return item.strip()
+        for item in value.values():
+            found = first_string(item, keys)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = first_string(item, keys)
+            if found:
+                return found
+    return ""
+
+if data is None:
+    sys.exit(0)
+
+parts = []
+
+reason = first_string(data, ["reason", "message", "description", "prompt", "justification"])
+if reason:
+    parts.append(reason)
+
+command = first_string(data, ["command", "program"])
+if command:
+    parts.append("Command: " + command.split("\n", 1)[0])
+
+host = first_string(data, ["host"])
+protocol = first_string(data, ["protocol"])
+port = first_string(data, ["port"])
+if host:
+    network = "Network: " + host
+    if port:
+        network += ":" + port
+    if protocol:
+        network += " (" + protocol + ")"
+    parts.append(network)
+
+file_path = first_string(data, ["file_path", "grantRoot", "path"])
+if file_path:
+    parts.append("Path: " + file_path)
+
+tool_name = first_string(data, ["tool_name", "toolName", "tool_title", "toolTitle"])
+if tool_name and not command:
+    parts.append("Tool: " + tool_name)
+
+deduped = []
+seen = set()
+for part in parts:
+    normalized = part.strip()
+    if not normalized:
+        continue
+    key = normalized.casefold()
+    if key in seen:
+        continue
+    seen.add(key)
+    deduped.append(normalized)
+
+sys.stdout.write(" | ".join(deduped[:3]))
+PY
+}
+
+log_notification() {
+    local kind="$1"
+    local message="$2"
+    local log_message=""
+
+    log_message="$(printf '%s' "$message" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
+
+    if [ -n "$CLAUDE_NOTIFY_LOG_FILE" ]; then
+        mkdir -p "$(dirname "$CLAUDE_NOTIFY_LOG_FILE")" 2>/dev/null || true
+        {
+            printf '%s\t%s\t%s\n' "$kind" "$(date '+%Y-%m-%d %H:%M:%S')" "$log_message" >> "$CLAUDE_NOTIFY_LOG_FILE"
+        } 2>/dev/null || true
+    fi
+}
+
+play_sound() {
+    local sound_path="$1"
+
+    if [ -x /usr/bin/afplay ] && [ -r "$sound_path" ]; then
+        /usr/bin/afplay "$sound_path" >/dev/null 2>&1 &
+    fi
+}
+
+shell_single_quote() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+build_click_command() {
+    local project_path="$1"
+    local session_id="${2:-}"
+    local helper="${CLAUDE_NOTIFY_CLICK_HANDLER:-}"
+    local quoted_helper=""
+
+    if [ -z "$helper" ] || [ ! -x "$helper" ]; then
+        return 1
+    fi
+
+    quoted_helper="$(shell_single_quote "$helper")"
+    if [ -n "$project_path" ] || [ -n "$session_id" ]; then
+        printf '%s %s %s\n' "$quoted_helper" "$(shell_single_quote "$project_path")" "$(shell_single_quote "$session_id")"
+        return 0
+    fi
+
+    printf '%s\n' "$quoted_helper"
+}
+
+show_popup_with_osascript() {
+    local title="$1"
+    local subtitle="$2"
+    local message="$3"
+    local escaped_title=""
+    local escaped_subtitle=""
+    local escaped_message=""
+
+    if [ ! -x /usr/bin/osascript ]; then
+        return 0
+    fi
+
+    escaped_title="$(escape_osascript_string "$title")"
+    escaped_subtitle="$(escape_osascript_string "$subtitle")"
+    escaped_message="$(escape_osascript_string "$message")"
+    /usr/bin/osascript -e "display notification \"$escaped_message\" with title \"$escaped_title\" subtitle \"$escaped_subtitle\"" >/dev/null 2>&1 &
+}
+
+show_popup() {
+    local title="$1"
+    local subtitle="$2"
+    local message="$3"
+    local project_path="${4:-}"
+    local session_id="${5:-}"
+    local click_command=""
+    local terminal_notifier=""
+    local -a notifier_args=()
+
+    if [ "$CLAUDE_NOTIFY_POPUP" != "1" ]; then
+        return 0
+    fi
+
+    click_command="$(build_click_command "$project_path" "$session_id" || true)"
+    terminal_notifier="$(resolve_terminal_notifier || true)"
+    if [ -n "$terminal_notifier" ]; then
+        notifier_args=(
+            -title "$title"
+            -subtitle "$subtitle"
+            -message "$message"
+            -activate "$CLAUDE_NOTIFY_GHOSTTY_BUNDLE_ID"
+        )
+        if [ -n "$click_command" ]; then
+            notifier_args+=(-execute "$click_command")
+        fi
+        "$terminal_notifier" "${notifier_args[@]}" >/dev/null 2>&1 || true
+        return 0
+    fi
+
+    show_popup_with_osascript "$title" "$subtitle" "$message"
+}
+
+normalize_notification_text() {
+    local text="$1"
+
+    "$CLAUDE_NOTIFY_PYTHON_BIN" - "$text" <<'PY'
+import re
+import sys
+
+text = sys.argv[1]
+
+text = text.replace("\r", " ").replace("\n", " ")
+text = re.sub(r"```.*?```", " ", text, flags=re.S)
+text = re.sub(r"`([^`]*)`", r"\1", text)
+text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text)
+text = re.sub(r"[*_~]+", "", text)
+text = re.sub(r"^\s{0,3}>\s*", "", text)
+text = re.sub(r"\s+", " ", text).strip()
+
+sys.stdout.write(text)
+PY
+}
+
+first_line_notification_text() {
+    local text="$1"
+
+    "$CLAUDE_NOTIFY_PYTHON_BIN" - "$text" <<'PY'
+import sys
+
+text = sys.argv[1]
+text = text.replace("\r\n", "\n").replace("\r", "\n")
+sys.stdout.write(text.split("\n", 1)[0])
+PY
+}
+
+truncate_notification_text() {
+    local text="$1"
+    local max_chars="${2:-$CLAUDE_NOTIFY_MESSAGE_MAX_CHARS}"
+
+    "$CLAUDE_NOTIFY_PYTHON_BIN" - "$text" "$max_chars" <<'PY'
+import sys
+
+text = sys.argv[1].strip()
+try:
+    max_chars = int(sys.argv[2])
+except Exception:
+    max_chars = 90
+
+if max_chars < 4 or len(text) <= max_chars:
+    sys.stdout.write(text)
+else:
+    cut = text[: max_chars - 3]
+    space = cut.rfind(" ")
+    if space >= max(12, (max_chars - 3) // 2):
+        cut = cut[:space]
+    sys.stdout.write(cut.rstrip() + "...")
+PY
+}
+
+status_line_for_project() {
+    local project_path="$1"
+    local status_suffix="$2"
+    local project_name=""
+
+    project_name="$(project_name_from_path "$project_path")"
+    if [ -n "$project_name" ]; then
+        printf '%s %s\n' "$project_name" "$status_suffix"
+        return 0
+    fi
+
+    printf '%s\n' "$status_suffix"
+}
+
+notify_with_project() {
+    local kind="$1"
+    local sound_path="$2"
+    local status_suffix="$3"
+    local fallback_detail="$4"
+    local project_path="${5:-}"
+    local detail="${6:-}"
+    local session_id="${7:-}"
+    local subtitle=""
+    local message=""
+    local log_message=""
+
+    subtitle="$(status_line_for_project "$project_path" "$status_suffix")"
+    case "$kind" in
+        task_complete)
+            detail="$(first_line_notification_text "$detail")"
+            detail="$(normalize_notification_text "$detail")"
+            if [ -z "$detail" ]; then
+                detail="$fallback_detail"
+            fi
+            message="$(truncate_notification_text "$detail")"
+            ;;
+        *)
+            detail="$(normalize_notification_text "$detail")"
+            if [ -z "$detail" ]; then
+                detail="$fallback_detail"
+            fi
+            message="$(truncate_notification_text "$detail")"
+            ;;
+    esac
+    log_message="$subtitle"
+    if [ -n "$message" ]; then
+        log_message="$log_message | $message"
+    fi
+
+    log_notification "$kind" "$log_message"
+    play_sound "$sound_path"
+    show_popup "$CLAUDE_NOTIFY_TITLE" "$subtitle" "$message" "$project_path" "$session_id"
+}
+
+notify_task_complete() {
+    notify_with_project "task_complete" "$CLAUDE_NOTIFY_SOUND" "finished" "Open Claude for details." "${1:-}" "${2:-}" "${3:-}"
+}
+
+notify_approval_requested() {
+    notify_with_project "approval_requested" "$CLAUDE_NOTIFY_APPROVAL_SOUND" "needs approval" "Review the pending approval in Claude." "${1:-}" "${2:-}" "${3:-}"
+}
+
+register_ghostty_session() {
+    local project_path="$1"
+    local session_id="$2"
+    local helper="${CLAUDE_NOTIFY_CLICK_HANDLER:-}"
+
+    if [ -z "$session_id" ] || [ -z "$helper" ] || [ ! -x "$helper" ]; then
+        return 0
+    fi
+
+    CLAUDE_NOTIFY_GHOSTTY_BUNDLE_ID="$CLAUDE_NOTIFY_GHOSTTY_BUNDLE_ID" \
+        CLAUDE_NOTIFY_GHOSTTY_SESSION_MAP="$CLAUDE_NOTIFY_GHOSTTY_SESSION_MAP" \
+        "$helper" --register-session "$project_path" "$session_id" >/dev/null 2>&1 || true
+}
+
+last_assistant_from_transcript() {
+    local transcript_path="$1"
+
+    tail -n 200 "$transcript_path" 2>/dev/null | "$CLAUDE_NOTIFY_PYTHON_BIN" - <<'PY'
+import json
+import sys
+
+for line in reversed(sys.stdin.readlines()):
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        obj = json.loads(line)
+    except (json.JSONDecodeError, ValueError):
+        continue
+    role = obj.get("type", "")
+    if role != "assistant":
+        continue
+    content = obj.get("message", {}).get("content") if isinstance(obj.get("message"), dict) else obj.get("content")
+    if isinstance(content, list):
+        for block in reversed(content):
+            if isinstance(block, dict) and block.get("type") == "text":
+                text = block.get("text", "").strip()
+                if text:
+                    sys.stdout.write(text)
+                    sys.exit(0)
+    elif isinstance(content, str) and content.strip():
+        sys.stdout.write(content)
+        sys.exit(0)
+PY
+}
+
+handle_permission_request_hook() {
+    local payload=""
+    local project_path=""
+    local session_id=""
+    local detail=""
+
+    payload="$(cat)"
+    project_path="$(project_path_from_payload "$payload")"
+    session_id="$(session_id_from_payload "$payload")"
+    detail="$(approval_detail_from_payload "$payload")"
+    notify_approval_requested "$project_path" "$detail" "$session_id"
+}
+
+handle_session_start_hook() {
+    local payload=""
+    local project_path=""
+    local session_id=""
+
+    payload="$(cat)"
+    project_path="$(project_path_from_payload "$payload")"
+    session_id="$(session_id_from_payload "$payload")"
+    register_ghostty_session "$project_path" "$session_id"
+}
+
+handle_stop_hook() {
+    local payload=""
+    local project_path=""
+    local session_id=""
+    local detail=""
+    local transcript_path=""
+
+    payload="$(cat)"
+    project_path="$(project_path_from_payload "$payload")"
+    session_id="$(session_id_from_payload "$payload")"
+
+    detail="$(json_get_string "$payload" "last_assistant_message")"
+
+    if [ -z "$detail" ]; then
+        transcript_path="$(json_get_string "$payload" "transcript_path")"
+        if [ -n "$transcript_path" ] && [ -r "$transcript_path" ]; then
+            detail="$(last_assistant_from_transcript "$transcript_path" || true)"
+        fi
+    fi
+
+    notify_task_complete "$project_path" "$detail" "$session_id"
+}
+
+handle_script_mode() {
+    case "${1:-}" in
+        --session-start-hook)
+            handle_session_start_hook
+            return 0
+            ;;
+        --stop-hook)
+            handle_stop_hook
+            return 0
+            ;;
+        --permission-request-hook)
+            handle_permission_request_hook
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+main() {
+    if handle_script_mode "$@"; then
+        return 0
+    fi
+
+    printf 'Usage: claude-notify --session-start-hook|--stop-hook|--permission-request-hook\n' >&2
+    return 1
+}
+
+main "$@"

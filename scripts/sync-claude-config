@@ -1,0 +1,73 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+require "json"
+
+mode = ARGV.first == "--remove" ? :remove : :apply
+root = File.expand_path("..", __dir__)
+hooks_fragment_path = File.join(root, "app-config", "claude-hooks.json")
+settings_path = File.expand_path("~/.claude/settings.json")
+
+MANAGED_MARKER = "claude-notify"
+
+def read_json_template(path, root)
+  JSON.parse(File.read(path).gsub("${DOTFILES_ROOT}", root))
+end
+
+def read_json_file(path)
+  return {} unless File.exist?(path)
+
+  JSON.parse(File.read(path))
+end
+
+def write_json_file(path, data)
+  FileUtils.mkdir_p(File.dirname(path))
+  File.write(path, "#{JSON.pretty_generate(data)}\n")
+end
+
+def managed_group?(group)
+  hooks = group["hooks"]
+  return false unless hooks.is_a?(Array)
+
+  hooks.any? { |h| h["command"].to_s.include?(MANAGED_MARKER) }
+end
+
+def clean_managed_hooks(existing_hooks)
+  result = {}
+  existing_hooks.each do |event_name, groups|
+    next unless groups.is_a?(Array)
+
+    cleaned = groups.reject { |group| managed_group?(group) }
+    result[event_name] = cleaned unless cleaned.empty?
+  end
+  result
+end
+
+def merge_hooks(existing_hooks, fragment_hooks)
+  result = clean_managed_hooks(existing_hooks)
+  fragment_hooks.each do |event_name, groups|
+    result[event_name] = [] unless result[event_name].is_a?(Array)
+    groups.each do |group|
+      result[event_name] << group unless result[event_name].any? { |item| item == group }
+    end
+  end
+  result
+end
+
+hooks_fragment = File.exist?(hooks_fragment_path) ? read_json_template(hooks_fragment_path, root) : {}
+fragment_hooks = hooks_fragment.fetch("hooks", {})
+
+settings = read_json_file(settings_path)
+
+if mode == :remove
+  if settings.key?("hooks") && settings["hooks"].is_a?(Hash)
+    settings["hooks"] = clean_managed_hooks(settings["hooks"])
+    settings.delete("hooks") if settings["hooks"].empty?
+  end
+else
+  settings["hooks"] = {} unless settings["hooks"].is_a?(Hash)
+  settings["hooks"] = merge_hooks(settings["hooks"], fragment_hooks)
+end
+
+write_json_file(settings_path, settings)
