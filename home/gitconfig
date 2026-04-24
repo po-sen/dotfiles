@@ -22,5 +22,11 @@
 	path = ~/.gitconfig.futurenestit
 [includeIf "hasconfig:remote.*.url:https://github.com/futurenestit/**"]
 	path = ~/.gitconfig.futurenestit
+[includeIf "hasconfig:remote.*.url:git@github.com:posen-chiu/**"]
+	path = ~/.gitconfig.futurenestit
+[includeIf "hasconfig:remote.*.url:ssh://git@github.com/posen-chiu/**"]
+	path = ~/.gitconfig.futurenestit
+[includeIf "hasconfig:remote.*.url:https://github.com/posen-chiu/**"]
+	path = ~/.gitconfig.futurenestit
 [includeIf "gitdir:~/.cache/uv/git-v0/db/"]
 	path = ~/.gitconfig.futurenestit
