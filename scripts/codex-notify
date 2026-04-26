@@ -413,7 +413,7 @@ notify_with_project() {
 
     subtitle="$(status_line_for_project "$project_path" "$status_suffix")"
     case "$kind" in
-        task_complete)
+        task_complete|approval_requested)
             detail="$(first_line_notification_text "$detail")"
             detail="$(normalize_notification_text "$detail")"
             if [ -z "$detail" ]; then
