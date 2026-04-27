@@ -96,7 +96,7 @@ keybind = chain=clear_screen
 # ===== terminal controls =====
 # Avoid leaking Ghostty's modified-key escape sequence into shells that do not
 # handle Shift+Enter specially.
-keybind = shift+enter=text:\x0d
+# keybind = shift+enter=text:\x0d
 keybind = cmd+shift+j=write_screen_file:open,plain
 keybind = cmd+alt+shift+j=write_screen_file:paste,plain
 keybind = cmd+shift+r=toggle_readonly
