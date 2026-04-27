@@ -184,11 +184,12 @@ def first_string(value, keys):
 if data is None:
     sys.exit(0)
 
-parts = []
-
 reason = first_string(data, ["reason", "message", "description", "prompt", "justification"])
 if reason:
-    parts.append(reason)
+    sys.stdout.write(reason)
+    sys.exit(0)
+
+parts = []
 
 command = first_string(data, ["command", "program"])
 if command:
