@@ -317,14 +317,48 @@ import sys
 
 text = sys.argv[1]
 
-text = text.replace("\r", " ").replace("\n", " ")
+text = text.replace("\r\n", "\n").replace("\r", "\n")
 text = re.sub(r"```.*?```", " ", text, flags=re.S)
-text = re.sub(r"`([^`]*)`", r"\1", text)
+
+protected_spans = []
+
+def protect_span(match):
+    protected_spans.append(match.group(1).replace("\n", " "))
+    return f"\x00{len(protected_spans) - 1}\x00"
+
+text = re.sub(r"`([^`]*)`", protect_span, text)
 text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
 text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text)
-text = re.sub(r"[*_~]+", "", text)
-text = re.sub(r"^\s{0,3}>\s*", "", text)
+
+def strip_block_markers(line):
+    line = re.sub(r"^\s{0,3}#{1,6}\s+", "", line)
+    line = re.sub(r"^\s{0,3}>\s?", "", line)
+    line = re.sub(r"^\s{0,3}(?:[-+*]|\d+[.)])\s+", "", line)
+    return line
+
+text = "\n".join(strip_block_markers(line) for line in text.split("\n"))
+
+emphasis_patterns = [
+    r"(?<![\w\\])\*\*\*(?=\S)(.*?\S)(?<!\\)\*\*\*(?!\w)",
+    r"(?<![\w\\])\*\*(?=\S)(.*?\S)(?<!\\)\*\*(?!\w)",
+    r"(?<![\w\\])\*(?=\S)(.*?\S)(?<!\\)\*(?!\w)",
+    r"(?<![\w\\])___(?=\S)(.*?\S)(?<!\\)___(?!\w)",
+    r"(?<![\w\\])__(?=\S)(.*?\S)(?<!\\)__(?!\w)",
+    r"(?<![\w\\])_(?=\S)(.*?\S)(?<!\\)_(?!\w)",
+    r"(?<!\\)~~(?=\S)(.*?\S)(?<!\\)~~",
+]
+for pattern in emphasis_patterns:
+    previous = None
+    while previous != text:
+        previous = text
+        text = re.sub(pattern, r"\1", text)
+
+def restore_span(match):
+    return protected_spans[int(match.group(1))]
+
+text = re.sub(r"\x00(\d+)\x00", restore_span, text)
+text = re.sub(r"\\([\\`*_{}\[\]()#+\-.!~|>])", r"\1", text)
+text = text.replace("\n", " ")
 text = re.sub(r"\s+", " ", text).strip()
 
 sys.stdout.write(text)
