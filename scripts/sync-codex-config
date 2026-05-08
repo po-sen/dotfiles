@@ -137,6 +137,7 @@ def remove_hooks_config(existing, fragment)
 end
 
 entries = parse_entries(fragment_path, root)
+legacy_entries = [["features", "codex_hooks", "true"]]
 hooks_fragment = File.exist?(hooks_fragment_path) ? read_json_template(hooks_fragment_path, root) : {}
 write_config = true
 
@@ -144,6 +145,7 @@ if mode == :remove
   if File.exist?(config_path)
     lines = File.readlines(config_path, chomp: true)
     entries.each { |section, key, value| remove_key(lines, section, key, value) }
+    legacy_entries.each { |section, key, value| remove_key(lines, section, key, value) }
     lines.shift while lines.first&.strip == ""
     lines.pop while lines.last&.strip == ""
   else
@@ -165,6 +167,7 @@ else
   remove_key(lines, "tui", "terminal_title", '["current-dir", "session-id"]')
   remove_key(lines, "tui", "notifications", '["agent-turn-complete"]')
   remove_key(lines, "tui", "notification_condition", '"always"')
+  legacy_entries.each { |section, key, value| remove_key(lines, section, key, value) }
   entries.each { |section, key, value| set_key(lines, section, key, value) }
   FileUtils.mkdir_p(File.dirname(config_path))
 
