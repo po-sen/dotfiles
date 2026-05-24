@@ -26,7 +26,7 @@ VIM_PLUGS := $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.v
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync update teardown
+.PHONY: help device sync update teardown
 
 define ENSURE_BREW
 if [ ! -x "$(BREW)" ]; then \
@@ -61,6 +61,9 @@ endef
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "; print "Available targets:"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+device: ## Show the current device profile
+	@/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; puts "Device ID: #{device_id}"; puts "Brewfile: #{device_brewfile_path}"; puts "Tool versions: #{device_tool_versions_path}"'
 
 $(HOME)/.%: $(HOME_DIR)/%
 	@ln -sf $< $@
