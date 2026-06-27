@@ -112,3 +112,5 @@ keybind = chain=equalize_splits
 # 下分割後自動 equalize
 keybind = shift+cmd+d=new_split:down
 keybind = chain=equalize_splits
+
+keybind = super+v=paste_from_clipboard
