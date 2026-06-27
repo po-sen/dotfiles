@@ -6,7 +6,7 @@ require "json"
 
 mode = ARGV.first == "--remove" ? :remove : :apply
 root = File.expand_path("..", __dir__)
-hooks_fragment_path = File.join(root, "app-config", "claude-hooks.json")
+hooks_fragment_path = File.join(root, "config", "claude-hooks.json")
 settings_path = File.expand_path("~/.claude/settings.json")
 
 MANAGED_MARKER = "claude-notify"

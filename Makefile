@@ -8,11 +8,27 @@ endif
 
 ROOT := $(CURDIR)
 HOME_DIR := $(ROOT)/home
-APP_CONFIG_DIR := $(ROOT)/app-config
-GHOSTTY_CONFIG_SOURCE := $(APP_CONFIG_DIR)/ghostty
+CONFIG_DIR := $(ROOT)/config
+GHOSTTY_CONFIG_SOURCE := $(CONFIG_DIR)/ghostty
+DEVICE_ID ?= $(shell \
+	normalize() { printf '%s' "$$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$$//'; }; \
+	override="$$(normalize "$$DOTFILES_DEVICE_ID")"; \
+	if [ -n "$$override" ]; then printf '%s\n' "$$override"; exit; fi; \
+	uuid="$$(ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null | sed -n 's/.*"IOPlatformUUID" = "\([^"]*\)".*/\1/p')"; \
+	if [ -n "$$uuid" ]; then printf 'mac-%s\n' "$$(printf '%s' "$$uuid" | shasum -a 256 | awk '{print substr($$1, 1, 12)}')"; exit; fi; \
+	name="$$(scutil --get LocalHostName 2>/dev/null || hostname -s 2>/dev/null || true)"; \
+	slug="$$(normalize "$$name")"; \
+	printf 'mac-%s\n' "$${slug:-local}" \
+)
 HOME_FILES := $(wildcard $(HOME_DIR)/*)
 HOME_LINKS := $(patsubst $(HOME_DIR)/%,$(HOME)/.%,$(HOME_FILES))
 GHOSTTY_CONFIG_LINK := $(HOME)/.config/ghostty/config
+DEFAULT_BREWFILE := $(ROOT)/brewfiles/default.rb
+DEFAULT_TOOL_VERSIONS := $(ROOT)/tool-versions/default
+DEVICE_BREWFILE := $(ROOT)/brewfiles/$(DEVICE_ID).rb
+DEVICE_TOOL_VERSIONS := $(ROOT)/tool-versions/$(DEVICE_ID)
+CURRENT_BREWFILE := $(ROOT)/brewfiles/current.rb
+CURRENT_TOOL_VERSIONS := $(ROOT)/tool-versions/current
 
 BREW := $(HOMEBREW_PREFIX)/bin/brew
 HOMEBREW_BASH := $(HOMEBREW_PREFIX)/bin/bash
@@ -26,7 +42,7 @@ VIM_PLUGS := $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.v
 
 .DEFAULT_GOAL := help
 
-.PHONY: help device sync update teardown
+.PHONY: help sync update teardown
 
 define ENSURE_BREW
 if [ ! -x "$(BREW)" ]; then \
@@ -62,33 +78,13 @@ endef
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "; print "Available targets:"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-device: ## Show the current device profile
-	@/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; ensure_current_profile_links!; puts "Device ID: #{device_id}"; puts "Brewfile: #{device_brewfile_path}"; puts "Current Brewfile: #{current_brewfile_link_path} -> #{File.readlink(current_brewfile_link_path)}"; puts "Tool versions: #{device_tool_versions_path}"; puts "Current tool versions: #{current_tool_versions_link_path} -> #{File.readlink(current_tool_versions_link_path)}"'
-
-$(HOME)/.%: $(HOME_DIR)/%
-	@ln -sf $< $@
-
-$(GHOSTTY_CONFIG_LINK): $(GHOSTTY_CONFIG_SOURCE)
-	@mkdir -p $(dir $@)
-	@ln -sf $< $@
-
-$(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(ROOT)/vimrc
-	@mkdir -p $(dir $@)
-	@ln -sf $< $@
-
-$(VIM_PLUGS):
-	@curl --silent --create-dirs -fLo $@ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-
-sync: $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions to the current machine
+sync: -profile $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions to the current machine
 	@$(ROOT)/scripts/sync-codex-config
 	@$(ROOT)/scripts/sync-claude-config
-	@/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; ensure_current_profile_links!'
-	@tool_versions_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print device_tool_versions_path')"; \
-		ln -sfn "$$tool_versions_file" "$(HOME)/.tool-versions"
+	@ln -sfn "$(CURRENT_TOOL_VERSIONS)" "$(HOME)/.tool-versions"
 	@$(ENSURE_BREW)
-	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print device_brewfile_path')"; \
-		test -f "$$device_file"; \
-		$(BREW) bundle install --file="$$device_file" $(BREW_BUNDLE_FLAGS)
+	@test -f "$(CURRENT_BREWFILE)"
+	@$(BREW) bundle install --file="$(CURRENT_BREWFILE)" $(BREW_BUNDLE_FLAGS)
 	@$(ENSURE_PRIMARY_BASH)
 	@if [ ! -x "$(NVIM)" ]; then echo "Neovim is not installed at $(NVIM). Run 'make sync' again after brew sync completes, or install neovim in your device Brewfile." >&2; exit 1; fi
 	@$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall >/dev/null 2>&1
@@ -99,10 +95,9 @@ sync: $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions
 		done; \
 		$(ASDF) install
 
-update: ## Write installed Homebrew packages back to this device's Brewfile
+update: -profile ## Write installed Homebrew packages back to this device's Brewfile
 	@if [ ! -x "$(BREW)" ]; then echo "Homebrew is not installed at $(BREW). 'make update' requires an existing Homebrew installation to dump installed packages." >&2; exit 1; fi
-	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; ensure_current_profile_links!; print device_brewfile_path')"; \
-	$(BREW) bundle dump --file="$$device_file" $(BREW_DUMP_FLAGS)
+	@$(BREW) bundle dump --file="$(DEVICE_BREWFILE)" $(BREW_DUMP_FLAGS)
 
 teardown: ## Remove repo-managed dotfiles plus Vim and asdf state
 	@$(ROOT)/scripts/sync-codex-config --remove
@@ -119,3 +114,24 @@ teardown: ## Remove repo-managed dotfiles plus Vim and asdf state
 			$(ASDF) plugin remove "$$plugin"; \
 		done; \
 	fi
+
+-profile:
+	@mkdir -p "$(dir $(DEVICE_BREWFILE))" "$(dir $(DEVICE_TOOL_VERSIONS))"
+	@test -f "$(DEVICE_BREWFILE)" || cp "$(DEFAULT_BREWFILE)" "$(DEVICE_BREWFILE)"
+	@test -f "$(DEVICE_TOOL_VERSIONS)" || cp "$(DEFAULT_TOOL_VERSIONS)" "$(DEVICE_TOOL_VERSIONS)"
+	@ln -sfn "$(notdir $(DEVICE_BREWFILE))" "$(CURRENT_BREWFILE)"
+	@ln -sfn "$(notdir $(DEVICE_TOOL_VERSIONS))" "$(CURRENT_TOOL_VERSIONS)"
+
+$(HOME)/.%: $(HOME_DIR)/%
+	@ln -sf $< $@
+
+$(GHOSTTY_CONFIG_LINK): $(GHOSTTY_CONFIG_SOURCE)
+	@mkdir -p $(dir $@)
+	@ln -sf $< $@
+
+$(HOME)/.vimrc $(HOME)/.config/nvim/init.vim: $(ROOT)/vimrc
+	@mkdir -p $(dir $@)
+	@ln -sf $< $@
+
+$(VIM_PLUGS):
+	@curl --silent --create-dirs -fLo $@ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim

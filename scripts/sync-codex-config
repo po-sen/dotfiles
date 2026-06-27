@@ -7,8 +7,8 @@ require "json"
 mode = ARGV.first == "--remove" ? :remove : :apply
 root = File.expand_path("..", __dir__)
 config_path = File.expand_path("~/.codex/config.toml")
-fragment_path = File.join(root, "app-config", "codex-notifications.toml")
-hooks_fragment_path = File.join(root, "app-config", "codex-hooks.json")
+fragment_path = File.join(root, "config", "codex-notifications.toml")
+hooks_fragment_path = File.join(root, "config", "codex-hooks.json")
 hooks_config_path = File.expand_path("~/.codex/hooks.json")
 
 def section_header?(line)
