@@ -1,3 +1,4 @@
 python 3.12.13
 nodejs 24.15.0
-golang 1.25.7
+golang 1.26.3
+rust 1.91.1
