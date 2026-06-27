@@ -7,9 +7,9 @@ This repository helps me set up and maintain my Mac.
 make sync
 ```
 This auto-detects a stable per-device fingerprint, uses a file like
-`brewfiles/device-xxxxxxxxxxxx.rb`, and creates it from `brewfiles/default.rb`
+`brewfiles/mac-xxxxxxxxxxxx.rb`, and creates it from `brewfiles/default.rb`
 if missing. It also keeps `.tool-versions` pointed at a matching
-`tool-versions/device-xxxxxxxxxxxx`, created from `tool-versions/default` if
+`tool-versions/mac-xxxxxxxxxxxx`, created from `tool-versions/default` if
 needed. Files under `home/` are linked into `~/` as dotfiles. The repo-managed
 Ghostty config at `app-config/ghostty` is linked into
 `~/.config/ghostty/config`. It will install Homebrew first if Homebrew is
@@ -25,6 +25,10 @@ stay in that local file.
 
 `make teardown` removes those repo-managed Codex notification keys again while
 leaving the rest of `~/.codex/config.toml` intact.
+
+`make device` shows the current Mac profile and refreshes generated symlinks:
+`brewfiles/current.rb` and `tool-versions/current`. These symlinks point at the
+profile files used by this computer and are ignored by git.
 
 ## Update
 ```bash

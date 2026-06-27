@@ -63,7 +63,7 @@ help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "; print "Available targets:"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 device: ## Show the current device profile
-	@/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; puts "Device ID: #{device_id}"; puts "Brewfile: #{device_brewfile_path}"; puts "Tool versions: #{device_tool_versions_path}"'
+	@/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; ensure_current_profile_links!; puts "Device ID: #{device_id}"; puts "Brewfile: #{device_brewfile_path}"; puts "Current Brewfile: #{current_brewfile_link_path} -> #{File.readlink(current_brewfile_link_path)}"; puts "Tool versions: #{device_tool_versions_path}"; puts "Current tool versions: #{current_tool_versions_link_path} -> #{File.readlink(current_tool_versions_link_path)}"'
 
 $(HOME)/.%: $(HOME_DIR)/%
 	@ln -sf $< $@
@@ -82,10 +82,11 @@ $(VIM_PLUGS):
 sync: $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions to the current machine
 	@$(ROOT)/scripts/sync-codex-config
 	@$(ROOT)/scripts/sync-claude-config
-	@tool_versions_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_tool_versions!')"; \
+	@/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; ensure_current_profile_links!'
+	@tool_versions_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print device_tool_versions_path')"; \
 		ln -sfn "$$tool_versions_file" "$(HOME)/.tool-versions"
 	@$(ENSURE_BREW)
-	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_brewfile!')"; \
+	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print device_brewfile_path')"; \
 		test -f "$$device_file"; \
 		$(BREW) bundle install --file="$$device_file" $(BREW_BUNDLE_FLAGS)
 	@$(ENSURE_PRIMARY_BASH)
@@ -100,7 +101,7 @@ sync: $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions
 
 update: ## Write installed Homebrew packages back to this device's Brewfile
 	@if [ ! -x "$(BREW)" ]; then echo "Homebrew is not installed at $(BREW). 'make update' requires an existing Homebrew installation to dump installed packages." >&2; exit 1; fi
-	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; print ensure_device_brewfile!')"; \
+	@device_file="$$(/usr/bin/ruby -e 'load "$(ROOT)/Brewfile"; ensure_current_profile_links!; print device_brewfile_path')"; \
 	$(BREW) bundle dump --file="$$device_file" $(BREW_DUMP_FLAGS)
 
 teardown: ## Remove repo-managed dotfiles plus Vim and asdf state

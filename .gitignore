@@ -1,1 +1,3 @@
 Brewfile.lock.json
+brewfiles/current.rb
+tool-versions/current
