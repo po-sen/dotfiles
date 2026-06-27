@@ -34,7 +34,7 @@ brew "neovim"
 # HTTP(S) server and reverse proxy, and IMAP/POP3 proxy server
 brew "nginx"
 # Create, run, and share large language models (LLMs)
-brew "ollama", restart_service: :changed
+brew "ollama"
 # Framework for managing multi-language pre-commit hooks
 brew "pre-commit"
 # Fast Git hook manager written in Rust, drop-in alternative to pre-commit
