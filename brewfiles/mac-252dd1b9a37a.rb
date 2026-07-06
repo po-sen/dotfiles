@@ -30,6 +30,8 @@ brew "gh"
 brew "git"
 # GNU Privacy Guard (OpenPGP)
 brew "gnupg"
+# Fast linters runner for Go
+brew "golangci-lint"
 # Kubernetes package manager
 brew "helm"
 # Improved top (interactive process viewer)
