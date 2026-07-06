@@ -1,14 +1,35 @@
-tap "po-sen/tap"
+tap "homebrew/core"
+tap "po-sen/tap", trusted: true
+# Static analysis and lint tool, for (ba)sh scripts
+brew "shellcheck"
+# Static checker for GitHub Actions workflow files
+brew "actionlint"
 # Extendable version manager with support for Ruby, Node.js, Erlang & more
 brew "asdf"
 # Bourne-Again SHell, a UNIX command interpreter
 brew "bash"
 # Programmable completion for Bash 4.2+
 brew "bash-completion@2"
+# Programming language designed for robustness, optimality, and clarity
+brew "zig"
+# Compile Cargo project with zig as linker
+brew "cargo-zigbuild"
+# GNU File, Shell, and Text utilities
+brew "coreutils"
+# Debian package management system
+brew "dpkg"
+# GNU awk utility
+brew "gawk"
+# Cryptography and SSL/TLS Toolkit
+brew "openssl@3"
 # Interact with Google Gemini AI models from the command-line
 brew "gemini-cli"
+# GitHub command-line tool
+brew "gh"
 # Distributed revision control system
 brew "git"
+# GNU Privacy Guard (OpenPGP)
+brew "gnupg"
 # Kubernetes package manager
 brew "helm"
 # Improved top (interactive process viewer)
@@ -19,14 +40,22 @@ brew "jq"
 brew "kubernetes-cli"
 # Utility for directing compilation
 brew "make"
+# Sign files & verify signatures. Works with signify in OpenBSD
+brew "minisign"
 # Ambitious Vim-fork focused on extensibility and agility
 brew "neovim"
 # HTTP(S) server and reverse proxy, and IMAP/POP3 proxy server
 brew "nginx"
 # Open-source, cross-platform JavaScript runtime environment
 brew "node@22"
+# Package compiler and linker metadata toolkit
+brew "pkgconf"
+# Interpreted, interactive, object-oriented programming language
+brew "python@3.14"
 # Framework for managing multi-language pre-commit hooks
 brew "pre-commit"
+# Fast Git hook manager written in Rust, drop-in alternative to pre-commit
+brew "prek"
 # Display directories as trees (with optional color/HTML output)
 brew "tree"
 # Executes a program periodically, showing output fullscreen
