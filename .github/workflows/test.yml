@@ -79,8 +79,10 @@ jobs:
           test -f "$HOME/.config/nvim/autoload/plug.vim"
           test -f "$DEVICE_BREWFILE"
           test -f "$DEVICE_TOOL_VERSIONS"
-          test "$(readlink "$HOME/.tool-versions")" = "$DEVICE_TOOL_VERSIONS"
-          test "$(dscl . -read /Users/$(id -un) UserShell | awk 'END { print $2 }')" = "$EXPECTED_LOGIN_SHELL"
+          test "$(readlink "$HOME/.tool-versions")" = "$PWD/tool-versions/current"
+          test "$(readlink "brewfiles/current.rb")" = "${DOTFILES_DEVICE_ID}.rb"
+          test "$(readlink "tool-versions/current")" = "${DOTFILES_DEVICE_ID}"
+          test "$(dscl . -read "/Users/$(id -un)" UserShell | awk 'END { print $2 }')" = "$EXPECTED_LOGIN_SHELL"
           grep -F 'brew "asdf"' "$DEVICE_BREWFILE"
           grep -F 'golang 1.25.7' "$DEVICE_TOOL_VERSIONS"
 
