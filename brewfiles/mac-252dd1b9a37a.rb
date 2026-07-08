@@ -72,8 +72,6 @@ brew "zsh-completions"
 cask "codex"
 # OpenAI's Codex desktop app for managing coding agents
 cask "codex-app"
-# Cryptocurrency wallet for ada on the Cardano blockchain
-cask "daedalus-mainnet"
 # Universal database tool and SQL client
 cask "dbeaver-community"
 # App to build and share containerised applications and microservices
