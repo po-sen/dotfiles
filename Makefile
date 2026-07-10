@@ -34,6 +34,8 @@ BREW := $(HOMEBREW_PREFIX)/bin/brew
 HOMEBREW_BASH := $(HOMEBREW_PREFIX)/bin/bash
 NVIM := $(HOMEBREW_PREFIX)/bin/nvim
 ASDF := $(HOMEBREW_PREFIX)/bin/asdf
+DOCKER_CLI_PLUGIN_DIR := $(HOME)/.docker/cli-plugins
+DOCKER_CLI_PLUGINS := docker-compose docker-buildx
 BREW_BUNDLE_FLAGS ?= --force --cleanup
 BREW_DUMP_FLAGS ?= --force --brews --casks --taps --vscode
 
@@ -85,6 +87,11 @@ sync: -profile $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool
 	@$(ENSURE_BREW)
 	@test -f "$(CURRENT_BREWFILE)"
 	@$(BREW) bundle install --file="$(CURRENT_BREWFILE)" $(BREW_BUNDLE_FLAGS)
+	@set -eu; \
+		mkdir -p "$(DOCKER_CLI_PLUGIN_DIR)"; \
+		for plugin in $(DOCKER_CLI_PLUGINS); do \
+			ln -sfn "$(HOMEBREW_PREFIX)/opt/$$plugin/bin/$$plugin" "$(DOCKER_CLI_PLUGIN_DIR)/$$plugin"; \
+		done
 	@$(ENSURE_PRIMARY_BASH)
 	@if [ ! -x "$(NVIM)" ]; then echo "Neovim is not installed at $(NVIM). Run 'make sync' again after brew sync completes, or install neovim in your device Brewfile." >&2; exit 1; fi
 	@$(NVIM) --headless +PlugUpgrade +PlugUpdate +qall >/dev/null 2>&1
