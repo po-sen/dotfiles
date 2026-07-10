@@ -54,8 +54,6 @@ brew "make"
 brew "minisign"
 # Ambitious Vim-fork focused on extensibility and agility
 brew "neovim"
-# HTTP(S) server and reverse proxy, and IMAP/POP3 proxy server
-brew "nginx"
 # Open-source, cross-platform JavaScript runtime environment
 brew "node@22"
 # Package compiler and linker metadata toolkit
