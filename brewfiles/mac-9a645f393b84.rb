@@ -7,6 +7,14 @@ brew "asdf"
 brew "bash"
 # Programmable completion for Bash 4.2+
 brew "bash-completion@2"
+# Container runtimes on MacOS (and Linux) with minimal setup
+brew "colima", restart_service: :changed
+# Pack, ship and run any application as a lightweight container
+brew "docker"
+# Docker CLI plugin for extended build capabilities with BuildKit
+brew "docker-buildx"
+# Isolated development environments using Docker
+brew "docker-compose"
 # Interact with Google Gemini AI models from the command-line
 brew "gemini-cli"
 # GitHub command-line tool
@@ -31,8 +39,6 @@ brew "libpq"
 brew "make"
 # Ambitious Vim-fork focused on extensibility and agility
 brew "neovim"
-# HTTP(S) server and reverse proxy, and IMAP/POP3 proxy server
-brew "nginx"
 # Create, run, and share large language models (LLMs)
 brew "ollama"
 # Framework for managing multi-language pre-commit hooks
@@ -77,8 +83,6 @@ cask "cyberduck"
 cask "dbeaver-community"
 # Voice and text chat software
 cask "discord"
-# App to build and share containerised applications and microservices
-cask "docker-desktop"
 # Online diagram software
 cask "drawio"
 # Terminal emulator that uses platform-native UI and GPU acceleration
