@@ -14,8 +14,16 @@ brew "bash-completion@2"
 brew "zig"
 # Compile Cargo project with zig as linker
 brew "cargo-zigbuild"
+# Container runtimes on MacOS (and Linux) with minimal setup
+brew "colima", restart_service: :changed
 # GNU File, Shell, and Text utilities
 brew "coreutils"
+# Pack, ship and run any application as a lightweight container
+brew "docker"
+# Docker CLI plugin for extended build capabilities with BuildKit
+brew "docker-buildx"
+# Isolated development environments using Docker
+brew "docker-compose"
 # Debian package management system
 brew "dpkg"
 # GNU awk utility
@@ -74,8 +82,6 @@ cask "codex"
 cask "codex-app"
 # Universal database tool and SQL client
 cask "dbeaver-community"
-# App to build and share containerised applications and microservices
-cask "docker-desktop"
 # Driver for the Flic bluetooth button
 cask "flic"
 # Terminal emulator that uses platform-native UI and GPU acceleration
