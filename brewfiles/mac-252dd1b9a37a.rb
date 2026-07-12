@@ -48,6 +48,8 @@ brew "htop"
 brew "jq"
 # Kubernetes command-line interface
 brew "kubernetes-cli"
+# Postgres C API library
+brew "libpq"
 # Utility for directing compilation
 brew "make"
 # Sign files & verify signatures. Works with signify in OpenBSD
