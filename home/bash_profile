@@ -25,6 +25,10 @@ _dotfiles_path_prepend "${ASDF_DATA_DIR:-$HOME/.asdf}/shims"
 export PATH
 unset -f _dotfiles_path_prepend
 
+if [[ -n "${SSH_CONNECTION:-}" ]]; then
+    export NVIM_NOTTYFAST=1
+fi
+
 [[ -r "$HOME/.bashrc" ]] && . "$HOME/.bashrc"
 
 alias vi='nvim -p'
