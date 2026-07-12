@@ -1,13 +1,31 @@
+_dotfiles_path_prepend() {
+    [[ -d "$1" ]] || return
+
+    case ":$PATH:" in
+        *":$1:"*) ;;
+        *) PATH="$1${PATH:+:$PATH}" ;;
+    esac
+}
+
+# Prefer Apple Silicon Homebrew when available, then fall back to Intel Homebrew.
+if [[ -x "/opt/homebrew/bin/brew" ]]; then
+    brew_bin="/opt/homebrew/bin/brew"
+elif [[ -x "/usr/local/bin/brew" ]]; then
+    brew_bin="/usr/local/bin/brew"
+fi
+
+if [[ -n "${brew_bin:-}" ]]; then
+    eval "$("$brew_bin" shellenv)"
+    [[ -r "$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh" ]] && . "$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"
+    _dotfiles_path_prepend "$HOMEBREW_PREFIX/opt/libpq/bin"
+    unset brew_bin
+fi
+
+_dotfiles_path_prepend "${ASDF_DATA_DIR:-$HOME/.asdf}/shims"
+export PATH
+unset -f _dotfiles_path_prepend
+
 [[ -r "$HOME/.bashrc" ]] && . "$HOME/.bashrc"
-
-[[ -r "/opt/homebrew/bin/brew" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
-[[ -r "/opt/homebrew/etc/profile.d/bash_completion.sh" ]] && . "/opt/homebrew/etc/profile.d/bash_completion.sh"
-
-# Intel
-[[ -r "/usr/local/bin/brew" ]] && eval "$(/usr/local/bin/brew shellenv)"
-[[ -r "/usr/local/etc/profile.d/bash_completion.sh" ]] && . "/usr/local/etc/profile.d/bash_completion.sh"
-
-export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"
 
 alias vi='nvim -p'
 alias vim='vim -p'
