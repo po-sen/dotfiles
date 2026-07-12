@@ -74,10 +74,10 @@ brew "wget"
 brew "zsh"
 # Additional completion definitions for zsh
 brew "zsh-completions"
+# OpenAI's official ChatGPT desktop app
+cask "chatgpt"
 # OpenAI's coding agent that runs in your terminal
 cask "codex"
-# OpenAI's Codex desktop app for managing coding agents
-cask "codex-app"
 # Universal database tool and SQL client
 cask "dbeaver-community"
 # Driver for the Flic bluetooth button
