@@ -66,6 +66,8 @@ brew "python@3.14"
 brew "pre-commit"
 # Fast Git hook manager written in Rust, drop-in alternative to pre-commit
 brew "prek"
+# Develop and deploy code with zero configuration
+brew "railway"
 # Display directories as trees (with optional color/HTML output)
 brew "tree"
 # Executes a program periodically, showing output fullscreen
