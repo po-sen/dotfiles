@@ -52,6 +52,8 @@ brew "kubernetes-cli"
 brew "libpq"
 # Utility for directing compilation
 brew "make"
+# Mac App Store command-line interface
+brew "mas"
 # Sign files & verify signatures. Works with signify in OpenBSD
 brew "minisign"
 # Ambitious Vim-fork focused on extensibility and agility
@@ -92,6 +94,8 @@ cask "ghostty"
 cask "google-chrome"
 # Terminal emulator as alternative to Apple's Terminal app
 cask "iterm2"
+# Tool to prevent the system from going into sleep mode
+cask "keepingyouawake"
 # Wallet desktop application to maintain multiple cryptocurrencies
 cask "ledger-wallet"
 # Move and resize windows using keyboard shortcuts or snap areas
@@ -100,3 +104,4 @@ cask "rectangle"
 cask "utm"
 # Network monitoring and troubleshooting tool
 cask "wifiman"
+mas "Portal", id: 1436994560
