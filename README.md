@@ -38,7 +38,9 @@ make update
 ```
 This writes the currently installed Homebrew and Mac App Store packages back
 into this Mac's own profile Brewfile under `brewfiles/`. It requires an
-existing Homebrew installation.
+existing Homebrew installation. Mac App Store discovery depends on Spotlight;
+if indexing is disabled, enable and rebuild it with `sudo mdutil -Eai on`, wait
+for `mas list` to return the installed apps, then run `make update` again.
 
 ## Teardown
 ```bash

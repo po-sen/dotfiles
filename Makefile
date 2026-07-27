@@ -31,6 +31,7 @@ CURRENT_BREWFILE := $(ROOT)/brewfiles/current.rb
 CURRENT_TOOL_VERSIONS := $(ROOT)/tool-versions/current
 
 BREW := $(HOMEBREW_PREFIX)/bin/brew
+MAS := $(HOMEBREW_PREFIX)/bin/mas
 HOMEBREW_BASH := $(HOMEBREW_PREFIX)/bin/bash
 NVIM := $(HOMEBREW_PREFIX)/bin/nvim
 ASDF := $(HOMEBREW_PREFIX)/bin/asdf
@@ -104,6 +105,26 @@ sync: -profile $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool
 
 update: -profile ## Write installed Homebrew and Mac App Store packages back to this device's Brewfile
 	@if [ ! -x "$(BREW)" ]; then echo "Homebrew is not installed at $(BREW). 'make update' requires an existing Homebrew installation to dump installed packages." >&2; exit 1; fi
+	@if [ ! -x "$(MAS)" ]; then echo "mas is not installed at $(MAS). Install it before running 'make update' so Mac App Store apps can be discovered." >&2; exit 1; fi
+	@set -eu; \
+		if /usr/bin/mdutil -s / 2>&1 | grep -Fq "Indexing disabled."; then \
+			echo "Spotlight indexing is disabled. mas cannot discover Mac App Store apps, so the Brewfile was not overwritten." >&2; \
+			echo "Enable and rebuild the index with 'sudo mdutil -Eai on', wait for indexing to finish, then run 'make update' again." >&2; \
+			exit 1; \
+		fi; \
+		mas_output="$$(mktemp)"; \
+		mas_errors="$$(mktemp)"; \
+		trap 'rm -f "$$mas_output" "$$mas_errors"' EXIT HUP INT TERM; \
+		if ! "$(MAS)" list >"$$mas_output" 2>"$$mas_errors"; then \
+			cat "$$mas_errors" >&2; \
+			echo "mas could not list installed Mac App Store apps, so the Brewfile was not overwritten." >&2; \
+			exit 1; \
+		fi; \
+		if grep -Fq "not indexed in Spotlight" "$$mas_errors"; then \
+			cat "$$mas_errors" >&2; \
+			echo "Wait for Spotlight to finish indexing the listed apps, then run 'make update' again." >&2; \
+			exit 1; \
+		fi
 	@$(BREW) bundle dump --file="$(DEVICE_BREWFILE)" $(BREW_DUMP_FLAGS)
 
 teardown: ## Remove repo-managed dotfiles plus Vim and asdf state
