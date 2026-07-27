@@ -36,9 +36,9 @@ by git.
 ```bash
 make update
 ```
-This writes the currently installed Homebrew packages back into this Mac's own
-profile Brewfile under `brewfiles/`. It requires an existing Homebrew
-installation.
+This writes the currently installed Homebrew and Mac App Store packages back
+into this Mac's own profile Brewfile under `brewfiles/`. It requires an
+existing Homebrew installation.
 
 ## Teardown
 ```bash

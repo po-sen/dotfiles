@@ -37,6 +37,8 @@ brew "lefthook"
 brew "libpq"
 # Utility for directing compilation
 brew "make"
+# Mac App Store command-line interface
+brew "mas"
 # Ambitious Vim-fork focused on extensibility and agility
 brew "neovim"
 # Create, run, and share large language models (LLMs)
@@ -47,6 +49,8 @@ brew "pre-commit"
 brew "prek"
 # Interpreted, interactive, object-oriented programming language
 brew "python@3.13"
+# Develop and deploy code with zero configuration
+brew "railway"
 # Send macOS User Notifications from the command-line
 brew "terminal-notifier"
 # Terminal multiplexer
@@ -69,14 +73,14 @@ brew "zsh-completions"
 cask "adguard"
 # VPN for privacy and security
 cask "adguard-vpn"
+# OpenAI's official ChatGPT desktop app
+cask "chatgpt"
 # Terminal-based AI coding assistant
 cask "claude-code@latest"
 # Best standalone Netflix player
 cask "clicker-for-netflix"
 # OpenAI's coding agent that runs in your terminal
 cask "codex"
-# OpenAI's Codex desktop app for managing coding agents
-cask "codex-app"
 # Server and cloud storage browser
 cask "cyberduck"
 # Universal database tool and SQL client
@@ -121,6 +125,15 @@ cask "utm"
 cask "visual-studio-code"
 # Network monitoring and troubleshooting tool
 cask "wifiman"
+mas "Endel", id: 1346247457
+mas "GarageBand", id: 682658836
+mas "iA Writer", id: 775737590
+mas "iMovie", id: 408981434
+mas "Keynote", id: 361285480
+mas "LINE", id: 539883307
+mas "Numbers", id: 361304891
+mas "Pages", id: 361309726
+mas "Portal", id: 1436994560
 vscode "1yib.rust-bundle"
 vscode "bierner.markdown-mermaid"
 vscode "codexbuild.codex-build"

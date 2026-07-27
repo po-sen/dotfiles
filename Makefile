@@ -37,7 +37,7 @@ ASDF := $(HOMEBREW_PREFIX)/bin/asdf
 DOCKER_CLI_PLUGIN_DIR := $(HOME)/.docker/cli-plugins
 DOCKER_CLI_PLUGINS := docker-compose docker-buildx
 BREW_BUNDLE_FLAGS ?= --force --cleanup
-BREW_DUMP_FLAGS ?= --force --brews --casks --taps --vscode
+BREW_DUMP_FLAGS ?= --force --brews --casks --taps --mas --vscode
 
 DOTFILES := $(HOME_LINKS) $(GHOSTTY_CONFIG_LINK) $(HOME)/.vimrc $(HOME)/.config/nvim/init.vim
 VIM_PLUGS := $(HOME)/.vim/autoload/plug.vim $(HOME)/.config/nvim/autoload/plug.vim
@@ -102,7 +102,7 @@ sync: -profile $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool
 		done; \
 		$(ASDF) install
 
-update: -profile ## Write installed Homebrew packages back to this device's Brewfile
+update: -profile ## Write installed Homebrew and Mac App Store packages back to this device's Brewfile
 	@if [ ! -x "$(BREW)" ]; then echo "Homebrew is not installed at $(BREW). 'make update' requires an existing Homebrew installation to dump installed packages." >&2; exit 1; fi
 	@$(BREW) bundle dump --file="$(DEVICE_BREWFILE)" $(BREW_DUMP_FLAGS)
 
