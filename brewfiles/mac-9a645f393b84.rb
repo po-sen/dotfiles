@@ -51,6 +51,10 @@ brew "prek"
 brew "python@3.13"
 # Develop and deploy code with zero configuration
 brew "railway"
+# Static analysis and lint tool, for (ba)sh scripts
+brew "shellcheck"
+# Easiest, most secure way to use WireGuard and 2FA
+brew "tailscale"
 # Send macOS User Notifications from the command-line
 brew "terminal-notifier"
 # Terminal multiplexer
