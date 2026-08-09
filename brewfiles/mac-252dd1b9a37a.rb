@@ -54,6 +54,8 @@ brew "libpq"
 brew "make"
 # Mac App Store command-line interface
 brew "mas"
+# Minimalist GNU for Windows and GCC cross-compilers
+brew "mingw-w64"
 # Sign files & verify signatures. Works with signify in OpenBSD
 brew "minisign"
 # Ambitious Vim-fork focused on extensibility and agility
@@ -70,6 +72,8 @@ brew "pre-commit"
 brew "prek"
 # Develop and deploy code with zero configuration
 brew "railway"
+# Easiest, most secure way to use WireGuard and 2FA
+brew "tailscale"
 # Display directories as trees (with optional color/HTML output)
 brew "tree"
 # Executes a program periodically, showing output fullscreen
