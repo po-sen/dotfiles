@@ -106,8 +106,12 @@ cask "iterm2"
 cask "keepingyouawake"
 # Wallet desktop application to maintain multiple cryptocurrencies
 cask "ledger-wallet"
+# App to write, plan, collaborate, and get organised
+cask "notion"
 # Move and resize windows using keyboard shortcuts or snap areas
 cask "rectangle"
+# Team communication and collaboration software
+cask "slack"
 # Virtual machines UI using QEMU
 cask "utm"
 # Network monitoring and troubleshooting tool
