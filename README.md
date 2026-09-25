@@ -21,13 +21,20 @@ Homebrew-installed bash after `brew bundle install` completes
 (`/opt/homebrew/bin/bash` on Apple Silicon), using `sudo` when a shell change
 is needed.
 
-`make sync` also patches the local `~/.codex/config.toml` from
-`config/codex-notifications.toml`. It does not own or store the full Codex
-config, so machine-local project trust, model, plugin, and marketplace settings
-stay in that local file.
+`make sync` and `make teardown` do not modify Codex or Claude Code settings.
+The previously installed notification hooks have been retired. The old
+`scripts/codex-notify` and `scripts/claude-notify` paths remain as silent
+compatibility entry points, so existing hook registrations pointing at this
+checkout stop producing sounds, popups, logs, and Ghostty session tracking as
+soon as the checkout is updated. No `make sync` or `make teardown` is needed
+to silence them. Other machines need their own checkout updated as well.
 
-`make teardown` removes those repo-managed Codex notification keys again while
-leaving the rest of `~/.codex/config.toml` intact.
+Existing local hook registrations are left in place but do nothing. If cleaning
+them up manually, remove only commands referencing this repository's
+`scripts/codex-notify` or `scripts/claude-notify` from `~/.codex/hooks.json` and
+`~/.claude/settings.json`, plus a legacy top-level Codex `notify` entry if it
+references `scripts/codex-notify`. Preserve unrelated hooks and settings.
+The legacy `codex-notify` CLI wrapper still forwards non-hook arguments to Codex.
 
 Generated `current` symlinks show which profile this Mac uses and are ignored
 by git.

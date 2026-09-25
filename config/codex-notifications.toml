@@ -1,4 +1,0 @@
-suppress_unstable_features_warning = true
-
-[features]
-hooks = true

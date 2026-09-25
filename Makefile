@@ -82,8 +82,6 @@ help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "; print "Available targets:"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 sync: -profile $(DOTFILES) $(VIM_PLUGS) ## Apply this device's Brewfile and tool versions to the current machine
-	@$(ROOT)/scripts/sync-codex-config
-	@$(ROOT)/scripts/sync-claude-config
 	@ln -sfn "$(CURRENT_TOOL_VERSIONS)" "$(HOME)/.tool-versions"
 	@$(ENSURE_BREW)
 	@test -f "$(CURRENT_BREWFILE)"
@@ -128,8 +126,6 @@ update: -profile ## Write installed Homebrew and Mac App Store packages back to 
 	@$(BREW) bundle dump --file="$(DEVICE_BREWFILE)" $(BREW_DUMP_FLAGS)
 
 teardown: ## Remove repo-managed dotfiles plus Vim and asdf state
-	@$(ROOT)/scripts/sync-codex-config --remove
-	@$(ROOT)/scripts/sync-claude-config --remove
 	@for file in $(HOME_FILES); do \
 		rm -f "$(HOME)/.$$(basename "$$file")"; \
 	done
