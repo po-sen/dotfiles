@@ -28,8 +28,6 @@ brew "docker-compose"
 brew "dpkg"
 # GNU awk utility
 brew "gawk"
-# Cryptography and SSL/TLS Toolkit
-brew "openssl@3"
 # Interact with Google Gemini AI models from the command-line
 brew "gemini-cli"
 # GitHub command-line tool
@@ -60,18 +58,22 @@ brew "mingw-w64"
 brew "minisign"
 # Ambitious Vim-fork focused on extensibility and agility
 brew "neovim"
+# Cryptography and SSL/TLS Toolkit
+brew "openssl@3"
 # Open-source, cross-platform JavaScript runtime environment
 brew "node@22"
 # Package compiler and linker metadata toolkit
 brew "pkgconf"
-# Interpreted, interactive, object-oriented programming language
-brew "python@3.14"
 # Framework for managing multi-language pre-commit hooks
 brew "pre-commit"
 # Fast Git hook manager written in Rust, drop-in alternative to pre-commit
 brew "prek"
+# Interpreted, interactive, object-oriented programming language
+brew "python@3.14"
 # Develop and deploy code with zero configuration
 brew "railway"
+# Powerful, clean, object-oriented scripting language
+brew "ruby@3.3", link: true
 # Easiest, most secure way to use WireGuard and 2FA
 brew "tailscale"
 # Display directories as trees (with optional color/HTML output)
@@ -112,8 +114,6 @@ cask "notion"
 cask "rectangle"
 # Team communication and collaboration software
 cask "slack"
-# Virtual machines UI using QEMU
-cask "utm"
 # Network monitoring and troubleshooting tool
 cask "wifiman"
 mas "Portal", id: 1436994560
