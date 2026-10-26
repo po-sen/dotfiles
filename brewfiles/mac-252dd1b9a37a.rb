@@ -28,8 +28,6 @@ brew "docker-compose"
 brew "dpkg"
 # GNU awk utility
 brew "gawk"
-# Interact with Google Gemini AI models from the command-line
-brew "gemini-cli"
 # GitHub command-line tool
 brew "gh"
 # Distributed revision control system
@@ -102,12 +100,16 @@ cask "flic"
 cask "ghostty"
 # Web browser
 cask "google-chrome"
+# AI teammates that work across your apps and tools
+cask "grok-bot"
 # Terminal emulator as alternative to Apple's Terminal app
 cask "iterm2"
 # Tool to prevent the system from going into sleep mode
 cask "keepingyouawake"
 # Wallet desktop application to maintain multiple cryptocurrencies
 cask "ledger-wallet"
+# Orchestrates virtual Ubuntu instances
+cask "multipass"
 # App to write, plan, collaborate, and get organised
 cask "notion"
 # Move and resize windows using keyboard shortcuts or snap areas
